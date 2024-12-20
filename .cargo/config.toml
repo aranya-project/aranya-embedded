@@ -1,0 +1,16 @@
+[target.xtensa-esp32-none-elf]
+runner = "espflash flash --monitor"
+
+[env]
+ESP_LOG="INFO"
+
+[build]
+rustflags = [
+  "-C", "link-arg=-nostartfiles",
+  "-C", "link-arg=-Tlinkall.x",
+]
+
+target = "xtensa-esp32-none-elf"
+
+[unstable]
+build-std = ["alloc", "core"]

@@ -1,0 +1,5 @@
+# Configuration for act CI testing. To run just use `act`
+# Use catthehacker's Ubuntu image for amd64 testing
+--container-architecture linux/amd64
+# Converts references to the private linux runner to the public ubuntu runner
+-P self-hosted-linux-amd64=catthehacker/ubuntu:act-latest
