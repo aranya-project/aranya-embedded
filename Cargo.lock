@@ -63,6 +63,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fe8f5a8a398345e52358e18ff07cc17a568fbca5c6f73873d3a62056309603"
 
 [[package]]
+name = "base64"
+version = "0.21.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d297deb1925b89f2ccc13d7635fa0714f12c87adce1c75356b39ca9b7178567"
+
+[[package]]
 name = "basic-toml"
 version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -88,6 +94,9 @@ name = "bitflags"
 version = "2.6.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b048fb63fd8b5923fc5aa7b340d8e156aec7ec02f0c78fa8a6ddc2613f6f71de"
+dependencies = [
+ "serde",
+]
 
 [[package]]
 name = "bytemuck"
@@ -178,13 +187,59 @@ dependencies = [
 ]
 
 [[package]]
+name = "edge-dhcp"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "40b68d2c31cfa4d4bb4a8647ccf9469912164b975c063fc9a25f8ef19c53b1b6"
+dependencies = [
+ "edge-nal",
+ "edge-raw",
+ "embassy-futures",
+ "embassy-time",
+ "heapless",
+ "log",
+ "num_enum",
+ "rand_core",
+]
+
+[[package]]
+name = "edge-nal"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "11076200414c690c7cdf3ebe23337ff0cf704481c5a1bacd1c46fa300c762659"
+dependencies = [
+ "embedded-io-async",
+]
+
+[[package]]
+name = "edge-nal-embassy"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "88f36937273938bcb52a660f0b87c36f37faddf605d365b3cc65b596ddddfc2d"
+dependencies = [
+ "edge-nal",
+ "embassy-net",
+ "embedded-io-async",
+ "heapless",
+]
+
+[[package]]
+name = "edge-raw"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0cd56f6f142c3f9076b954b3f104e3c0e1145003a392e8f58285e14ecd937aa6"
+dependencies = [
+ "log",
+]
+
+[[package]]
 name = "embassy-embedded-hal"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5794414bc20e0d750f145bc0e82366b19dd078e9e075e8331fb8dd069a1cb6a2"
 dependencies = [
  "embassy-futures",
- "embassy-sync 0.6.0",
+ "embassy-sync 0.6.1",
  "embassy-time",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -266,13 +321,14 @@ dependencies = [
 
 [[package]]
 name = "embassy-sync"
-version = "0.6.0"
+version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3e0c49ff02ebe324faf3a8653ba91582e2d0a7fdef5bc88f449d5aa1bfcc05c"
+checksum = "3899a6e39fa3f54bf8aaf00979f9f9c0145a522f7244810533abbb748be6ce82"
 dependencies = [
  "cfg-if",
  "critical-section",
  "embedded-io-async",
+ "futures-sink",
  "futures-util",
  "heapless",
 ]
@@ -459,11 +515,16 @@ dependencies = [
 name = "esp-aranya"
 version = "0.1.0"
 dependencies = [
+ "critical-section",
+ "edge-dhcp",
+ "edge-nal",
+ "edge-nal-embassy",
  "embassy-executor",
  "embassy-net",
  "embassy-time",
  "embedded-io",
  "embedded-io-async",
+ "enumset",
  "esp-alloc",
  "esp-backtrace",
  "esp-hal",
@@ -472,6 +533,8 @@ dependencies = [
  "esp-wifi",
  "heapless",
  "log",
+ "ron",
+ "serde",
  "smoltcp",
  "static_cell",
 ]
@@ -524,7 +587,7 @@ dependencies = [
  "document-features",
  "embassy-embedded-hal",
  "embassy-futures",
- "embassy-sync 0.6.0",
+ "embassy-sync 0.6.1",
  "embedded-can",
  "embedded-hal 0.2.7",
  "embedded-hal 1.0.0",
@@ -633,7 +696,7 @@ dependencies = [
  "critical-section",
  "document-features",
  "embassy-net-driver",
- "embassy-sync 0.6.0",
+ "embassy-sync 0.6.1",
  "embedded-io",
  "embedded-io-async",
  "enumset",
@@ -952,6 +1015,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "num_enum"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4e613fc340b2220f734a8595782c551f1250e969d87d3be1ae0579e8d4065179"
+dependencies = [
+ "num_enum_derive",
+]
+
+[[package]]
+name = "num_enum_derive"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af1844ef2428cc3e1cb900be36181049ef3d3193c63e43026cfe202983b27a56"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
 name = "paste"
 version = "1.0.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1096,6 +1179,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "ron"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b91f7eff05f748767f183df4320a63d6936e9c6107d97c9e6bdd9784f4289c94"
+dependencies = [
+ "base64",
+ "bitflags 2.6.0",
+ "serde",
+ "serde_derive",
 ]
 
 [[package]]

@@ -1,0 +1,22 @@
+// Copy this file to `wifi.ron` in the local directory and fill in your values for the ESP32 access point
+
+// WiFi Access Point Configuration:
+// ssid: String (max 32 chars)
+// ssid_hidden: bool (Whether the SSID is hidden or visible)
+// channel: 1-14 (The channel the access point will operate on, in other words the different frequency band used. Commonly recommended non-overlapping channels are 1, 6, and 11 in North America)
+// secondary_channel: Optional<1-14> (The secondary channel configuration)
+// protocols: The set of protocols supported by the access point. (enum Protocol { P802D11B, P802D11BG, P802D11BGN, P802D11BGNLR, P802D11LR, P802D11BGNAX, } )
+// auth_method: The authentication method to be used by the access point. (enum AuthMethod { None, WEP, WPA, WPA2Personal, WPAWPA2Personal, WPA2Enterprise, WPA3Personal, WPA2WPA3Personal, WAPIPersonal, } )
+// password: String (max 64 chars)
+// max_connections: u16
+
+AccessPointConfiguration(
+    ssid: "MyNetwork",
+    ssid_hidden: false,
+    channel: 1,
+    secondary_channel: None,
+    protocols: [P802D11B, P802D11BG],
+    auth_method: WPA2Personal,
+    password: "my-secure-password",
+    max_connections: 4,
+)
