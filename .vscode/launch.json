@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "configurations": [
+      {
+        "type": "gdb",
+        "request": "attach",
+        "name": "Native Debug - Standard",
+        "target": "extended-remote :3333",
+        "executable": "target/xtensa-esp32-none-elf/debug/${workspaceRootFolderName}",
+        "gdbpath": "${command:espIdf.getToolchainGdb}",
+        "cwd": "${workspaceRoot}",
+        "autorun": [
+          "file target/xtensa-esp32-none-elf/debug/${workspaceRootFolderName}",
+          "set remote hardware-watchpoint-limit 2",
+          "mon reset halt",
+          "maintenance flush register-cache",
+          "thb main"
+        ]
+      },
+      {
+        "type": "gdb",
+        "request": "attach",
+        "name": "Native Debug - No Hardware Breakpoints",
+        "target": "extended-remote :3333",
+        "executable": "target/xtensa-esp32-none-elf/debug/${workspaceRootFolderName}",
+        "gdbpath": "${command:espIdf.getToolchainGdb}",
+        "cwd": "${workspaceRoot}",
+        "autorun": [
+          "file target/xtensa-esp32-none-elf/debug/${workspaceRootFolderName}",
+          "set remote hardware-watchpoint-limit 2",
+          "mon reset halt",
+          "maintenance flush register-cache",
+          "thb main",
+          "set breakpoint auto-hw off", 
+          "set can-use-hw-watchpoints 0"
+        ]
+      }
+    ]
+  }
