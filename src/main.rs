@@ -4,11 +4,13 @@
 
 use core::str::FromStr;
 
+use alloc::format;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
+use embedded_io_async::Write;
 use esp_alloc::heap_allocator;
 use esp_backtrace as _;
 use esp_hal::{prelude::*, timer::timg::TimerGroup};
@@ -68,25 +70,23 @@ async fn main(spawner: Spawner) {
         .expect("Failed to initialize wifi controller")
     );
 
+    // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;
-    let (wifi_interface, mut controller) =
+    let (wifi_interface, controller) =
         esp_wifi::wifi::new_with_mode(wifi_cont, wifi, WifiApDevice).unwrap();
 
-    // Configuration as an access point meaning that other devices access it as a router
-    controller
-        .set_configuration(&Configuration::AccessPoint(wifi_config()))
-        .unwrap();
-
+    // Server IP set
     let gw_ip_addr_str = "192.168.2.1";
     let gw_ip_addr = Ipv4Address::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
 
+    // Main configuration for the wifi stack in how it should set up internal and external IPs.
     let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
         address: Ipv4Cidr::new(gw_ip_addr, 24), // Creates a subnet with mask /24 (255.255.255.0)
         gateway: Some(gw_ip_addr),              // Sets the gateway IP
         dns_servers: Default::default(),        // No DNS servers configured
     });
 
-    let seed = 1234; // Used for generating TCP/IP sequence numbers
+    let seed = 1234; // Used for generating TCP/IP sequence numbers. //! Bad seed but acceptable for demonstration
 
     // Init network stack hosted on ESP32
     let stack = &*mk_static!(
@@ -99,12 +99,17 @@ async fn main(spawner: Spawner) {
         )
     );
 
+    // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
+    // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
+    // Running the network stack for handling communication events
     spawner.spawn(net_task(&stack)).ok();
+    // Running DHCP for internal IP setting
     spawner.spawn(run_dhcp(&stack, gw_ip_addr_str)).ok();
 
-    let mut rx_buffer = [0; 128];
-    let mut tx_buffer = [0; 128];
+    // TCP receive and transmit buffer sizes. 1KB for each
+    let mut rx_buffer = [0; 1024];
+    let mut tx_buffer = [0; 1024];
 
     loop {
         if stack.is_link_up() {
@@ -112,10 +117,7 @@ async fn main(spawner: Spawner) {
         }
         Timer::after(Duration::from_millis(500)).await;
     }
-    println!(
-        "Connect to the AP `esp-wifi` and point your browser to http://{gw_ip_addr_str}:8080/"
-    );
-    println!("DHCP is enabled so there's no need to configure a static IP, just in case:");
+
     while !stack.is_config_up() {
         Timer::after(Duration::from_millis(100)).await
     }
@@ -124,77 +126,62 @@ async fn main(spawner: Spawner) {
         .inspect(|c| println!("ipv4 config: {c:?}"));
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-    socket.set_timeout(Some(embassy_time::Duration::from_secs(10)));
+
+    println!("TCP server starting on port 8080");
+
     loop {
-        println!("Wait for connection...");
-        let r = socket
+        println!("Waiting for connection...");
+
+        match socket
             .accept(IpListenEndpoint {
                 addr: None,
                 port: 8080,
             })
-            .await;
-        println!("Connected...");
+            .await
+        {
+            Ok(_) => {
+                println!("Client connected");
 
-        if let Err(e) = r {
-            println!("connect error: {:?}", e);
-            continue;
-        }
+                // Create a buffer for reading
+                let mut buf = [0u8; 1024];
 
-        use embedded_io_async::Write;
-
-        let mut buffer = [0u8; 1024];
-        let mut pos = 0;
-        loop {
-            match socket.read(&mut buffer).await {
-                Ok(0) => {
-                    println!("read EOF");
-                    break;
-                }
-                Ok(len) => {
-                    let to_print =
-                        unsafe { core::str::from_utf8_unchecked(&buffer[..(pos + len)]) };
-
-                    if to_print.contains("\r\n\r\n") {
-                        println!("{}", to_print);
-                        break;
+                // Simple read loop
+                loop {
+                    match socket.read(&mut buf).await {
+                        Ok(0) => {
+                            println!("Connection closed");
+                            break;
+                        }
+                        Ok(n) => {
+                            println!("Received: {:?}", &buf[..n]);
+                        }
+                        Err(e) => {
+                            println!("Read error: {:?}", e);
+                            // Close the current socket connection
+                            let _ = socket.close();
+                            // Reset the socket by creating a new one
+                            drop(socket);
+                            socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+                            break;
+                        }
                     }
-
-                    pos += len;
                 }
-                Err(e) => {
-                    println!("read error: {:?}", e);
-                    break;
-                }
-            };
+            }
+            Err(e) => {
+                println!("Accept error: {:?}", e);
+                // Close the current socket connection
+                let _ = socket.close();
+                // Reset the socket by creating a new one
+                drop(socket);
+                socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+                // Add a small delay before retrying
+                Timer::after(Duration::from_millis(100)).await;
+            }
         }
-
-        let r = socket
-            .write_all(
-                b"HTTP/1.0 200 OK\r\n\r\n\
-            <html>\
-                <body>\
-                    <h1>Hello Rust! Hello esp-wifi!</h1>\
-                </body>\
-            </html>\r\n\
-            ",
-            )
-            .await;
-        if let Err(e) = r {
-            println!("write error: {:?}", e);
-        }
-
-        let r = socket.flush().await;
-        if let Err(e) = r {
-            println!("flush error: {:?}", e);
-        }
-        Timer::after(Duration::from_millis(1000)).await;
-
-        socket.close();
-        Timer::after(Duration::from_millis(1000)).await;
-
-        socket.abort();
     }
 }
+
+/// This gives each device connecting there own Ipv4 address
 #[embassy_executor::task]
 async fn run_dhcp(
     stack: &'static Stack<WifiDevice<'static, WifiApDevice>>,
@@ -238,24 +225,20 @@ async fn run_dhcp(
     }
 }
 
+/// This handles setting up a ESP32 router or access point
 #[embassy_executor::task]
 async fn connection(mut controller: WifiController<'static>) {
     println!("start connection task");
     println!("Device capabilities: {:?}", controller.capabilities());
     loop {
-        match esp_wifi::wifi::wifi_state() {
-            WifiState::ApStarted => {
-                // wait until we're no longer connected
-                controller.wait_for_event(WifiEvent::ApStop).await;
-                Timer::after(Duration::from_millis(5000)).await
-            }
-            _ => {}
+        // If ESP32 is an access point wait until we're no longer connected and then delay 5s before continuing.
+        if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
+            controller.wait_for_event(WifiEvent::ApStop).await;
+            Timer::after(Duration::from_millis(5000)).await
         }
+        // If ESP32 controller has not started configure it as an access point with the specified configurations
         if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = Configuration::AccessPoint(AccessPointConfiguration {
-                ssid: "esp-wifi".try_into().unwrap(),
-                ..Default::default()
-            });
+            let client_config = Configuration::AccessPoint(wifi_config());
             controller.set_configuration(&client_config).unwrap();
             println!("Starting wifi");
             controller.start_async().await.unwrap();
@@ -264,6 +247,7 @@ async fn connection(mut controller: WifiController<'static>) {
     }
 }
 
+/// This runs the entirety of the network stack
 #[embassy_executor::task]
 async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
     stack.run().await
