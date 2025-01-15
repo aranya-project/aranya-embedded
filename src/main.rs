@@ -2,9 +2,14 @@
 #![no_main]
 #![feature(impl_trait_in_assoc_type)]
 
-use core::str::FromStr;
+extern crate alloc;
+
+mod built;
+mod heap;
+mod tasks;
 
 use alloc::format;
+use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
@@ -22,12 +27,7 @@ use esp_wifi::wifi::{
 use esp_wifi::EspWifiController;
 use heap::init_heap;
 use log::info;
-
-extern crate alloc;
-
-mod built;
-mod heap;
-use built::wifi_config::wifi_config;
+use tasks::router_host::{connection, net_task, run_dhcp};
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -103,9 +103,9 @@ async fn main(spawner: Spawner) {
     // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
     // Running the network stack for handling communication events
-    spawner.spawn(net_task(&stack)).ok();
+    spawner.spawn(net_task(stack)).ok();
     // Running DHCP for internal IP setting
-    spawner.spawn(run_dhcp(&stack, gw_ip_addr_str)).ok();
+    spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
 
     // TCP receive and transmit buffer sizes. 1KB for each
     let mut rx_buffer = [0; 1024];
@@ -158,7 +158,7 @@ async fn main(spawner: Spawner) {
                         Err(e) => {
                             println!("Read error: {:?}", e);
                             // Close the current socket connection
-                            let _ = socket.close();
+                            socket.close();
                             // Reset the socket by creating a new one
                             drop(socket);
                             socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
@@ -170,7 +170,7 @@ async fn main(spawner: Spawner) {
             Err(e) => {
                 println!("Accept error: {:?}", e);
                 // Close the current socket connection
-                let _ = socket.close();
+                socket.close();
                 // Reset the socket by creating a new one
                 drop(socket);
                 socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
@@ -179,76 +179,4 @@ async fn main(spawner: Spawner) {
             }
         }
     }
-}
-
-/// This gives each device connecting there own Ipv4 address
-#[embassy_executor::task]
-async fn run_dhcp(
-    stack: &'static Stack<WifiDevice<'static, WifiApDevice>>,
-    gw_ip_addr: &'static str,
-) {
-    use core::net::{Ipv4Addr, SocketAddrV4};
-
-    use edge_dhcp::{
-        io::{self, DEFAULT_SERVER_PORT},
-        server::{Server, ServerOptions},
-    };
-    use edge_nal::UdpBind;
-    use edge_nal_embassy::{Udp, UdpBuffers};
-
-    let ip = Ipv4Addr::from_str(gw_ip_addr).expect("dhcp task failed to parse gw ip");
-
-    let mut buf = [0u8; 1500];
-
-    let mut gw_buf = [Ipv4Addr::UNSPECIFIED];
-
-    let buffers = UdpBuffers::<3, 1024, 1024, 10>::new();
-    let unbound_socket = Udp::new(stack, &buffers);
-    let mut bound_socket = unbound_socket
-        .bind(core::net::SocketAddr::V4(SocketAddrV4::new(
-            Ipv4Addr::UNSPECIFIED,
-            DEFAULT_SERVER_PORT,
-        )))
-        .await
-        .unwrap();
-
-    loop {
-        _ = io::server::run(
-            &mut Server::<64>::new(ip),
-            &ServerOptions::new(ip, Some(&mut gw_buf)),
-            &mut bound_socket,
-            &mut buf,
-        )
-        .await
-        .inspect_err(|e| log::warn!("DHCP server error: {e:?}"));
-        Timer::after(Duration::from_millis(500)).await;
-    }
-}
-
-/// This handles setting up a ESP32 router or access point
-#[embassy_executor::task]
-async fn connection(mut controller: WifiController<'static>) {
-    println!("start connection task");
-    println!("Device capabilities: {:?}", controller.capabilities());
-    loop {
-        // If ESP32 is an access point wait until we're no longer connected and then delay 5s before continuing.
-        if esp_wifi::wifi::wifi_state() == WifiState::ApStarted {
-            controller.wait_for_event(WifiEvent::ApStop).await;
-            Timer::after(Duration::from_millis(5000)).await
-        }
-        // If ESP32 controller has not started configure it as an access point with the specified configurations
-        if !matches!(controller.is_started(), Ok(true)) {
-            let client_config = Configuration::AccessPoint(wifi_config());
-            controller.set_configuration(&client_config).unwrap();
-            println!("Starting wifi");
-            controller.start_async().await.unwrap();
-            println!("Wifi started!");
-        }
-    }
-}
-
-/// This runs the entirety of the network stack
-#[embassy_executor::task]
-async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
-    stack.run().await
 }

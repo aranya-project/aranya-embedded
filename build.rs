@@ -1,3 +1,13 @@
+use aranya_crypto;
+use aranya_crypto_ffi;
+use aranya_device_ffi;
+use aranya_envelope_ffi;
+use aranya_policy_compiler::Compiler;
+use aranya_policy_lang::lang::parse_policy_document;
+use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
+use aranya_policy_vm::Module;
+use ciborium::de::from_reader;
+use ciborium::ser::into_writer;
 use ron::de::from_str;
 use serde::Deserialize;
 use std::env;
@@ -40,18 +50,6 @@ pub enum AuthMethod {
     WPA3Personal,
     WPA2WPA3Personal,
     WAPIPersonal,
-}
-
-fn protocols_to_bitflag(protocols: &[Protocol]) -> String {
-    if protocols.is_empty() {
-        return "Protocol::P802D11BGN".to_string();
-    }
-
-    protocols
-        .iter()
-        .map(|p| format!("Protocol::{:?}", p))
-        .collect::<Vec<_>>()
-        .join(" | ")
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -106,9 +104,65 @@ pub fn wifi_config() -> AccessPointConfiguration {{
 
     File::create(&dest_path)?.write_all(content.as_bytes())?;
 
+    aranya_setup();
+
     // Tell Cargo to rerun this if files change
     println!("cargo:rerun-if-changed=config/wifi.ron");
+    println!("cargo:rerun-if-changed=config/policy.md");
     println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
+}
+
+fn protocols_to_bitflag(protocols: &[Protocol]) -> String {
+    if protocols.is_empty() {
+        return "Protocol::P802D11BGN".to_string();
+    }
+
+    protocols
+        .iter()
+        .map(|p| format!("Protocol::{:?}", p))
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
+fn aranya_setup() {
+    let ffi_schema: &[ModuleSchema<'static>] = &[
+        aranya_envelope_ffi::Ffi::SCHEMA,
+        aranya_crypto_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
+        aranya_device_ffi::FfiDevice::SCHEMA,
+        aranya_idam_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
+        aranya_perspective_ffi::FfiPerspective::SCHEMA,
+    ];
+    // Parse policy
+    let ast =
+        parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");
+
+    // Compile AST
+    let module = Compiler::new(&ast)
+        .ffi_modules(ffi_schema)
+        .compile()
+        .expect("Failed to compile AST");
+
+    // Serialize module
+    let mut serialized = Vec::new();
+    into_writer(&module, &mut serialized).expect("Failed to serialize Module");
+
+    // Write to src/policy.rs
+    let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
+    let dest_path = Path::new(&out_dir).join("src/built/serialized_policy.bin");
+
+    // Create all parent directories if they don't exist
+    if let Some(parent) = dest_path.parent() {
+        fs::create_dir_all(parent).expect("Failed to create directories");
+    }
+
+    let mut f = File::create(dest_path).expect("Failed to create file");
+
+    f.write_all(&serialized)
+        .expect("Failed to write serialized data");
+
+    // Verify deserialization ability
+    let _: Module =
+        from_reader(&serialized[..]).expect("Failed to deserialize Module in build script");
 }
