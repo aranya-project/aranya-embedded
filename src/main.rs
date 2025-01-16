@@ -4,20 +4,29 @@
 
 extern crate alloc;
 
+mod aranya;
 mod built;
+mod hardware;
 mod heap;
 mod tasks;
 
 use alloc::format;
+use aranya::storage::SdCardManager;
 use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
+use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_io_async::Write;
+use embedded_sdmmc::{SdCard, Timestamp};
 use esp_alloc::heap_allocator;
 use esp_backtrace as _;
+use esp_hal::delay::Delay;
+use esp_hal::gpio::{Io, Level, Output};
+use esp_hal::spi::master::{Config, Spi};
+use esp_hal::spi::SpiMode;
 use esp_hal::{prelude::*, timer::timg::TimerGroup};
 use esp_println::println;
 use esp_wifi::wifi::{
@@ -25,9 +34,13 @@ use esp_wifi::wifi::{
     WifiState,
 };
 use esp_wifi::EspWifiController;
+use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
+use owo_colors::OwoColorize;
 use tasks::router_host::{connection, net_task, run_dhcp};
+
+pub const SERIALIZED_POLICY: &[u8] = include_bytes!("built/serialized_policy.bin");
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -69,6 +82,56 @@ async fn main(spawner: Spawner) {
         )
         .expect("Failed to initialize wifi controller")
     );
+
+    // SD Card Timer Tracking Initialization
+    println!("SD Card Timer intialization");
+    // ! Add live update from server for timer tracking
+    let start_time = Timestamp {
+        year_since_1970: 54,
+        zero_indexed_month: 7,
+        zero_indexed_day: 14,
+        hours: 12,
+        minutes: 0,
+        seconds: 0,
+    };
+    let esp_timer_source = Esp32TimeSource::new(timer_g1.timer1, start_time);
+
+    // SD Card SPI Interface Setting
+    println!("SD Card SPI Interface intialization");
+    let io = Io::new(peripherals.IO_MUX);
+    let sclk = peripherals.GPIO14;
+    let miso = peripherals.GPIO2;
+    let mosi = peripherals.GPIO15;
+    let cs = Output::new(peripherals.GPIO13, Level::Low);
+    let spi = Spi::new_with_config(
+        peripherals.SPI2,
+        Config {
+            frequency: 100u32.kHz(),
+            mode: SpiMode::Mode0,
+            ..Default::default()
+        },
+    );
+    let spi = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
+
+    // SD Card Initialization
+    println!("SD Card intialization");
+    let delay = Delay::new();
+    let ex_device =
+        ExclusiveDevice::new(spi, cs, delay).expect("Failed to set Exclusive SPI device");
+    // ExclusiveDevice implements SpiDevice traits needed for SdCard
+    let sd_card = SdCard::new(ex_device, delay);
+    println!(
+        "{}",
+        format!("Card Type is {:?}", sd_card.get_card_type()).blue()
+    );
+    // SD Card can take some time to initialize. This can cause a permanent loop if there is an error
+    while sd_card.get_card_type().is_none() {
+        println!(
+            "{}",
+            format!("Card Type is {:?}", sd_card.get_card_type()).blue()
+        );
+    }
+    let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
 
     // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;

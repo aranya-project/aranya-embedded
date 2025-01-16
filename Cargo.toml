@@ -52,7 +52,15 @@ edge-dhcp = "0.3.0"
 edge-nal = "0.3.0"
 edge-nal-embassy = "0.3.0"
 critical-section = "1.2.0"
-# esp-storage = { version = "0.4.0", features = ["critical-section","storage","esp32"] }
+embedded-sdmmc = "0.8.1"
+embedded-hal-bus = "0.2.0"
+owo-colors = "4.1.0"
+embedded-hal = "1.0.0"
+ciborium = { version = "0.2.2", default-features = false }
+getrandom = { version = "0.2.15", features = ["custom"] }
+postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
+serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
+aranya-runtime = "0.3.0"
 
 [build-dependencies]
 ron = "0.8.1"
@@ -60,7 +68,7 @@ serde = {version = "1.0.215", features = ["derive"] }
 aranya-policy-lang = "0.1.0"
 aranya-policy-compiler = "0.3.0"
 aranya-policy-vm = "0.3.1"
-ciborium = "0.2.2"
+ciborium = { version = "0.2.2", default-features = false }
 aranya-runtime = "0.3.0"
 aranya-envelope-ffi = "0.3.0"
 aranya-crypto-ffi = "0.3.0"
