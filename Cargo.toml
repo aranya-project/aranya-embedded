@@ -61,6 +61,8 @@ getrandom = { version = "0.2.15", features = ["custom"] }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 aranya-runtime = "0.3.0"
+aranya-policy-vm = "0.3.1"
+aranya-crypto = "0.2.1"
 
 [build-dependencies]
 ron = "0.8.1"

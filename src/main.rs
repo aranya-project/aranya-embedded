@@ -11,7 +11,11 @@ mod heap;
 mod tasks;
 
 use alloc::format;
-use aranya::storage::SdCardManager;
+use aranya::sink::VecSink;
+use aranya::storage::{SDIoManager, SdCardManager};
+use aranya_crypto::default::DefaultEngine;
+use aranya_runtime::linear::LinearStorageProvider;
+use aranya_runtime::{ClientState, GraphId, VmEffect};
 use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
@@ -25,6 +29,7 @@ use esp_alloc::heap_allocator;
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
+use esp_hal::peripherals::{SPI2, TIMG1};
 use esp_hal::spi::master::{Config, Spi};
 use esp_hal::spi::SpiMode;
 use esp_hal::{prelude::*, timer::timg::TimerGroup};
@@ -34,13 +39,26 @@ use esp_wifi::wifi::{
     WifiState,
 };
 use esp_wifi::EspWifiController;
+use hardware::esp32_engine::ESP32Engine;
 use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
 use owo_colors::OwoColorize;
+use static_cell::StaticCell;
 use tasks::router_host::{connection, net_task, run_dhcp};
 
-pub const SERIALIZED_POLICY: &[u8] = include_bytes!("built/serialized_policy.bin");
+// ! Panics will result in lockout if early enough so try to convert to using results that don't panic
+
+type Client = ClientState<
+    ESP32Engine<DefaultEngine>,
+    LinearStorageProvider<
+        SDIoManager<
+            ExclusiveDevice<Spi<'static, SPI2>, Output<'static>, Delay>,
+            Delay,
+            Esp32TimeSource<TIMG1>,
+        >,
+    >,
+>;
 
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
@@ -102,7 +120,7 @@ async fn main(spawner: Spawner) {
     let sclk = peripherals.GPIO14;
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
-    let cs = Output::new(peripherals.GPIO13, Level::Low);
+    let cs = Output::new(peripherals.GPIO13, Level::High);
     let spi = Spi::new_with_config(
         peripherals.SPI2,
         Config {
@@ -131,7 +149,17 @@ async fn main(spawner: Spawner) {
             format!("Card Type is {:?}", sd_card.get_card_type()).blue()
         );
     }
-    let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
+    /*
+        let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
+        let manager = SDIoManager::new(sd_manager, GraphId::default());
+
+        let policy = ESP32Engine::<DefaultEngine>::new();
+        let client = ClientState::new(policy, LinearStorageProvider::new(manager));
+    */
+
+    // Aranya Graph, Manager, and State Initialization
+    // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
+    // Create New Graph With the Specified Effect Sink
 
     // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;
