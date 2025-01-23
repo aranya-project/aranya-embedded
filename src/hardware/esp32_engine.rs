@@ -26,7 +26,18 @@ where
         let module: Module = from_reader(SERIALIZED_POLICY).expect("Failed to deserialize Module");
         let machine = Machine::from_module(module).expect("Couldn't get machine from module");
         let (engine, _key) = DefaultEngine::from_entropy(Rng);
-        // todo: FFIs
+        // In memory crypto keystore
+        // !TODO Make a on file keystore, not in memory.
+        let store = Store::new();
+        // Meant to be unique for every user/device
+        let user_id = UserId::random(&mut Rng);
+        let ffis: Vec<Box<dyn FfiCallable<DefaultEngine> + Send + 'static>> = vec![
+            Box::from(aranya_crypto_ffi::Ffi::new(store.clone())),
+            Box::from(aranya_device_ffi::FfiDevice::new(user_id)),
+            Box::from(aranya_envelope_ffi::Ffi),
+            Box::from(aranya_idam_ffi::Ffi::new(store)),
+            Box::from(aranya_perspective_ffi::FfiPerspective),
+        ];
         let policy = VmPolicy::new(machine, engine, Vec::new()).expect("Could not load policy");
         ESP32Engine { policy }
     }
@@ -43,7 +54,7 @@ where
         Ok(PolicyId::new(policy[0] as usize))
     }
 
-    fn get_policy<'a>(&'a self, _id: PolicyId) -> Result<&'a Self::Policy, EngineError> {
+    fn get_policy(&self, _id: PolicyId) -> Result<&Self::Policy, EngineError> {
         Ok(&self.policy)
     }
 }

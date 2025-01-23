@@ -1,8 +1,7 @@
 use embedded_sdmmc::{TimeSource, Timestamp};
 use esp_hal::prelude::*;
-use esp_hal::timer::timg::{Timer0, TimerX};
 use esp_hal::{
-    timer::timg::{Instance, Timer, Timer1},
+    timer::timg::{Instance, Timer},
     Blocking,
 };
 
@@ -25,7 +24,7 @@ where
     I: Instance,
 {
     pub fn new(timer: Timer<I, Blocking>, start_time: Timestamp) -> Self {
-        let mut esp32_timer = Self { timer, start_time };
+        let esp32_timer = Self { timer, start_time };
         esp32_timer.timer.reset();
         esp32_timer.timer.start();
         esp32_timer
@@ -86,4 +85,4 @@ where
     }
 }
 
-// ! Add proper timing to files storage
+// todo Add proper timing to files storage

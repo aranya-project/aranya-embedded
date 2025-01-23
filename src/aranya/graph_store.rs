@@ -2,17 +2,13 @@ use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
 use alloc::{format, vec};
-
-use core::cell::RefCell;
-use core::fmt::Debug;
-
-use embedded_hal::delay::DelayNs;
-use embedded_hal::spi::SpiDevice;
-use embedded_sdmmc::{Mode, SdCard, TimeSource, VolumeIdx, VolumeManager};
-
 use aranya_runtime::{linear, GraphId, Location, StorageError};
 use ciborium::de::from_reader;
 use ciborium::ser::into_writer;
+use core::cell::RefCell;
+use embedded_hal::delay::DelayNs;
+use embedded_hal::spi::SpiDevice;
+use embedded_sdmmc::{Mode, SdCard, TimeSource, VolumeIdx, VolumeManager};
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_allocvec};
@@ -366,7 +362,6 @@ where
 
             Ok(locations_vec)
         })?;
-        /* */
         Ok(data)
     }
 

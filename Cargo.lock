@@ -197,6 +197,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "aranya-esp32"
+version = "0.1.0"
+dependencies = [
+ "aranya-base58",
+ "aranya-buggy",
+ "aranya-crypto",
+ "aranya-crypto-ffi",
+ "aranya-device-ffi",
+ "aranya-envelope-ffi",
+ "aranya-idam-ffi",
+ "aranya-perspective-ffi",
+ "aranya-policy-compiler",
+ "aranya-policy-lang",
+ "aranya-policy-vm",
+ "aranya-runtime",
+ "ciborium",
+ "critical-section",
+ "edge-dhcp",
+ "edge-nal",
+ "edge-nal-embassy",
+ "embassy-executor",
+ "embassy-net",
+ "embassy-time",
+ "embedded-hal 1.0.0",
+ "embedded-hal-bus",
+ "embedded-io 0.6.1",
+ "embedded-io-async",
+ "embedded-sdmmc",
+ "enumset",
+ "esp-alloc",
+ "esp-backtrace",
+ "esp-hal",
+ "esp-hal-embassy",
+ "esp-println",
+ "esp-wifi",
+ "getrandom",
+ "heapless 0.8.0",
+ "log",
+ "owo-colors",
+ "postcard",
+ "ron",
+ "serde",
+ "smoltcp",
+ "static_cell",
+]
+
+[[package]]
 name = "aranya-idam-ffi"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1137,51 +1184,6 @@ dependencies = [
  "critical-section",
  "enumset",
  "linked_list_allocator",
-]
-
-[[package]]
-name = "esp-aranya"
-version = "0.1.0"
-dependencies = [
- "aranya-crypto",
- "aranya-crypto-ffi",
- "aranya-device-ffi",
- "aranya-envelope-ffi",
- "aranya-idam-ffi",
- "aranya-perspective-ffi",
- "aranya-policy-compiler",
- "aranya-policy-lang",
- "aranya-policy-vm",
- "aranya-runtime",
- "ciborium",
- "critical-section",
- "edge-dhcp",
- "edge-nal",
- "edge-nal-embassy",
- "embassy-executor",
- "embassy-net",
- "embassy-time",
- "embedded-hal 1.0.0",
- "embedded-hal-bus",
- "embedded-io 0.6.1",
- "embedded-io-async",
- "embedded-sdmmc",
- "enumset",
- "esp-alloc",
- "esp-backtrace",
- "esp-hal",
- "esp-hal-embassy",
- "esp-println",
- "esp-wifi",
- "getrandom",
- "heapless 0.8.0",
- "log",
- "owo-colors",
- "postcard",
- "ron",
- "serde",
- "smoltcp",
- "static_cell",
 ]
 
 [[package]]

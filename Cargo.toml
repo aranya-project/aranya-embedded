@@ -1,5 +1,5 @@
 [package]
-name = "esp-aranya"
+name = "aranya-esp32"
 version = "0.1.0"
 edition = "2021"
 
@@ -63,6 +63,13 @@ serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 aranya-runtime = "0.3.0"
 aranya-policy-vm = "0.3.1"
 aranya-crypto = "0.2.1"
+aranya-envelope-ffi = "0.3.0"
+aranya-crypto-ffi = "0.3.0"
+aranya-device-ffi = "0.3.0"
+aranya-idam-ffi = "0.3.0"
+aranya-perspective-ffi = "0.3.0"
+aranya-base58 = "0.1.0"
+aranya-buggy = "0.1.0"
 
 [build-dependencies]
 ron = "0.8.1"

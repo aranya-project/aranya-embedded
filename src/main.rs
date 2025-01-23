@@ -9,13 +9,14 @@ mod built;
 mod hardware;
 mod heap;
 mod tasks;
+mod tcp;
 
 use alloc::format;
 use aranya::sink::VecSink;
 use aranya::storage::{SDIoManager, SdCardManager};
 use aranya_crypto::default::DefaultEngine;
 use aranya_runtime::linear::LinearStorageProvider;
-use aranya_runtime::{ClientState, GraphId, VmEffect};
+use aranya_runtime::{ClientState, GraphId, PeerCache};
 use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
@@ -23,39 +24,36 @@ use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_io_async::Write;
 use embedded_sdmmc::{SdCard, Timestamp};
-use esp_alloc::heap_allocator;
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
-use esp_hal::peripherals::{SPI2, TIMG1};
+use esp_hal::peripheral::Peripheral;
+use esp_hal::peripherals::TIMG1;
 use esp_hal::spi::master::{Config, Spi};
 use esp_hal::spi::SpiMode;
+use esp_hal::timer::timg::TimerX;
 use esp_hal::{prelude::*, timer::timg::TimerGroup};
 use esp_println::println;
-use esp_wifi::wifi::{
-    AccessPointConfiguration, Configuration, WifiApDevice, WifiController, WifiDevice, WifiEvent,
-    WifiState,
-};
+use esp_wifi::wifi::{WifiApDevice, WifiDevice};
 use esp_wifi::EspWifiController;
 use hardware::esp32_engine::ESP32Engine;
 use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
 use owo_colors::OwoColorize;
-use static_cell::StaticCell;
 use tasks::router_host::{connection, net_task, run_dhcp};
+use tcp::sync::TcpSyncHandler;
 
 // ! Panics will result in lockout if early enough so try to convert to using results that don't panic
 
-type Client = ClientState<
+pub type Client = ClientState<
     ESP32Engine<DefaultEngine>,
     LinearStorageProvider<
         SDIoManager<
-            ExclusiveDevice<Spi<'static, SPI2>, Output<'static>, Delay>,
+            ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
             Delay,
-            Esp32TimeSource<TIMG1>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
         >,
     >,
 >;
@@ -116,7 +114,7 @@ async fn main(spawner: Spawner) {
 
     // SD Card SPI Interface Setting
     println!("SD Card SPI Interface intialization");
-    let io = Io::new(peripherals.IO_MUX);
+    let _io: Io = Io::new(peripherals.IO_MUX);
     let sclk = peripherals.GPIO14;
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
@@ -149,13 +147,12 @@ async fn main(spawner: Spawner) {
             format!("Card Type is {:?}", sd_card.get_card_type()).blue()
         );
     }
-    /*
-        let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
-        let manager = SDIoManager::new(sd_manager, GraphId::default());
 
-        let policy = ESP32Engine::<DefaultEngine>::new();
-        let client = ClientState::new(policy, LinearStorageProvider::new(manager));
-    */
+    let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
+    let manager = SDIoManager::new(sd_manager, GraphId::default());
+
+    let policy = ESP32Engine::<DefaultEngine>::new();
+    let client = ClientState::new(policy, LinearStorageProvider::new(manager));
 
     // Aranya Graph, Manager, and State Initialization
     // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
@@ -217,57 +214,41 @@ async fn main(spawner: Spawner) {
         .inspect(|c| println!("ipv4 config: {c:?}"));
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+    let peer_cache = PeerCache::new();
+    let effect_sink = VecSink::new();
 
     println!("TCP server starting on port 8080");
 
-    loop {
-        println!("Waiting for connection...");
+    println!("Waiting for connection...");
 
-        match socket
-            .accept(IpListenEndpoint {
-                addr: None,
-                port: 8080,
-            })
-            .await
-        {
-            Ok(_) => {
-                println!("Client connected");
+    let _buf = [0u8; 1024];
 
-                // Create a buffer for reading
-                let mut buf = [0u8; 1024];
-
-                // Simple read loop
-                loop {
-                    match socket.read(&mut buf).await {
-                        Ok(0) => {
-                            println!("Connection closed");
-                            break;
-                        }
-                        Ok(n) => {
-                            println!("Received: {:?}", &buf[..n]);
-                        }
-                        Err(e) => {
-                            println!("Read error: {:?}", e);
-                            // Close the current socket connection
-                            socket.close();
-                            // Reset the socket by creating a new one
-                            drop(socket);
-                            socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-                            break;
-                        }
-                    }
-                }
-            }
-            Err(e) => {
-                println!("Accept error: {:?}", e);
-                // Close the current socket connection
-                socket.close();
-                // Reset the socket by creating a new one
-                drop(socket);
-                socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-                // Add a small delay before retrying
-                Timer::after(Duration::from_millis(100)).await;
-            }
+    match socket
+        .accept(IpListenEndpoint {
+            addr: None,
+            port: 8080,
+        })
+        .await
+    {
+        Ok(_) => {
+            println!("Client connected");
+            let mut sync_handler =
+                TcpSyncHandler::new(socket, None, client, peer_cache, effect_sink);
+            sync_handler
+                .handle_connection()
+                .await
+                .expect("Failed to handle connection");
+        }
+        Err(e) => {
+            // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets
+            println!("Accept error: {:?}", e);
+            // Close the current socket connection
+            socket.close();
+            // Reset the socket by creating a new one
+            drop(socket);
+            socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+            // Add a small delay before retrying
+            Timer::after(Duration::from_millis(100)).await;
         }
     }
 }

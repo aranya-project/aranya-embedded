@@ -145,6 +145,7 @@ fn aranya_setup() {
         .expect("Failed to compile AST");
 
     // Serialize module
+    // ! Find out why postcard fails
     let mut serialized = Vec::new();
     into_writer(&module, &mut serialized).expect("Failed to serialize Module");
 
