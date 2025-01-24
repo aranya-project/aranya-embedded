@@ -1101,12 +1101,12 @@ dependencies = [
 
 [[package]]
 name = "embedded-sdmmc"
-version = "0.8.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "eb637331040ec9b35f6a8151904d1aca914cc349d14c91b9a3e92ba789b22f3f"
+version = "0.8.0"
+source = "git+https://github.com/rust-embedded-community/embedded-sdmmc-rs#e7eef2a4a241bbc3fcc1e101b06c98adcc8e17bd"
 dependencies = [
  "byteorder",
  "embedded-hal 1.0.0",
+ "embedded-io 0.6.1",
  "heapless 0.8.0",
  "log",
 ]

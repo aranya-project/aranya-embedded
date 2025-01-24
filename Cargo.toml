@@ -52,7 +52,8 @@ edge-dhcp = "0.3.0"
 edge-nal = "0.3.0"
 edge-nal-embassy = "0.3.0"
 critical-section = "1.2.0"
-embedded-sdmmc = "0.8.1"
+# Used git as read is still with mutable ref in the crate
+embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
 embedded-hal-bus = "0.2.0"
 owo-colors = "4.1.0"
 embedded-hal = "1.0.0"
