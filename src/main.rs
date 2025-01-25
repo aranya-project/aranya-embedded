@@ -12,8 +12,8 @@ mod tasks;
 mod tcp;
 
 use alloc::format;
+use aranya::graph_store::GraphManager;
 use aranya::sink::VecSink;
-use aranya::storage::{SDIoManager, SdCardManager};
 use aranya_crypto::default::DefaultEngine;
 use aranya_runtime::linear::LinearStorageProvider;
 use aranya_runtime::{ClientState, GraphId, PeerCache};
@@ -24,7 +24,9 @@ use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_sdmmc::{SdCard, Timestamp};
+use embedded_sdmmc::{
+    Directory, RawDirectory, RawVolume, SdCard, Timestamp, VolumeIdx, VolumeManager,
+};
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
@@ -50,7 +52,7 @@ use tcp::sync::TcpSyncHandler;
 pub type Client = ClientState<
     ESP32Engine<DefaultEngine>,
     LinearStorageProvider<
-        SDIoManager<
+        GraphManager<
             ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
             Delay,
             Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
@@ -148,11 +150,38 @@ async fn main(spawner: Spawner) {
         );
     }
 
-    let sd_manager = SdCardManager::new(sd_card, esp_timer_source);
-    let manager = SDIoManager::new(sd_manager, GraphId::default());
+    let volume_manager = mk_static!(
+        VolumeManager<
+            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+        >,
+        VolumeManager::new(sd_card, esp_timer_source)
+    );
+    let raw_volume: RawVolume = volume_manager
+        .open_raw_volume(VolumeIdx(0))
+        .expect("Failed to get volume");
 
-    let policy = ESP32Engine::<DefaultEngine>::new();
-    let client = ClientState::new(policy, LinearStorageProvider::new(manager));
+    let raw_root_directory: RawDirectory = volume_manager
+        .open_root_dir(raw_volume)
+        .expect("Failed to open root directory");
+
+    let root_directory = mk_static!(
+        Directory<
+            '_,
+            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+        raw_root_directory.to_directory(volume_manager)
+    );
+
+    // todo collect correct graphID
+    //let manager = GraphManager::new(root_directory, GraphId::default());
+
+    //let policy = ESP32Engine::<DefaultEngine>::new();
+    //let client = ClientState::new(policy, LinearStorageProvider::new(manager));
 
     // Aranya Graph, Manager, and State Initialization
     // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
@@ -215,7 +244,7 @@ async fn main(spawner: Spawner) {
 
     let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
     let peer_cache = PeerCache::new();
-    let effect_sink = VecSink::new();
+    //let effect_sink = VecSink::new();
 
     println!("TCP server starting on port 8080");
 
@@ -232,12 +261,14 @@ async fn main(spawner: Spawner) {
     {
         Ok(_) => {
             println!("Client connected");
+            /*
             let mut sync_handler =
                 TcpSyncHandler::new(socket, None, client, peer_cache, effect_sink);
             sync_handler
                 .handle_connection()
                 .await
                 .expect("Failed to handle connection");
+            */
         }
         Err(e) => {
             // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets

@@ -17,8 +17,6 @@ use postcard::{from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::hardware::sdcard_store::SdCardManager;
-
 /*
 Details of Implementation
 Location details as I understand it can be arbitrary so long as the pattern is consistent and applicably information for storage. The pattern were using:
@@ -33,25 +31,25 @@ The location binary represents a vector which iterates through every command in 
 */
 
 // Single threaded implementation therefore we only need Rc and RefCell, not Arc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
-
-pub struct GraphManager<'dir, SPI, DELAY, TS>
+// ! todo remove redundant Rc<>
+pub struct GraphManager<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
-    directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    directory: &'static Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
     pub graph_id: GraphId,
 }
 
-impl<'dir, SPI, DELAY, TS> GraphManager<'dir, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> GraphManager<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
     pub fn new(
-        directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+        directory: &'static Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
         graph_id: GraphId,
     ) -> Self {
         println!("{}", "New SD Card Graph IO Manager".green());
@@ -62,34 +60,31 @@ where
     }
 }
 
-pub struct GraphWriter<'file, SPI, DELAY, TS>
+pub struct GraphWriter<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
     /// Deserialize locations are used as usize markers for where deserialize start and end points should be on the graph data file
-    location_file: Rc<File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    location_file: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
     /// Raw binary data of the graph
-    data_file: Rc<File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    data_file: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
     /// Current head location
-    head_file: File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    head_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
 }
 
-impl<'file, SPI, DELAY, TS> GraphWriter<'file, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> GraphWriter<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
     pub fn new<'dir>(
-        location_file: File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        data_file: File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        head_file: File<'file, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-    ) -> GraphWriter<'file, SPI, DELAY, TS>
-    where
-        'dir: 'file,
-    {
+        location_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+        data_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+        head_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    ) -> GraphWriter<SPI, DELAY, TS> {
         GraphWriter {
             location_file: Rc::new(location_file),
             data_file: Rc::new(data_file),
@@ -98,13 +93,13 @@ where
     }
 }
 
-impl<'a, SPI, DELAY, TS> linear::io::Write for GraphWriter<'a, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> linear::io::Write for GraphWriter<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
-    type ReadOnly = GraphReader<'a, SPI, DELAY, TS>;
+    type ReadOnly = GraphReader<SPI, DELAY, TS>;
 
     fn readonly(&self) -> Self::ReadOnly {
         GraphReader {
@@ -313,17 +308,17 @@ where
     }
 }
 
-pub struct GraphReader<'a, SPI, DELAY, TS>
+pub struct GraphReader<SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
-    deserialize_locations_file_handle: Rc<File<'a, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
-    graph_data_file_handle: Rc<File<'a, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    deserialize_locations_file_handle: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    graph_data_file_handle: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
 }
 
-impl<'a, SPI, DELAY, TS> linear::io::Read for GraphReader<'a, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> linear::io::Read for GraphReader<SPI, DELAY, TS>
 where
     SPI: SpiDevice,
     DELAY: DelayNs,
@@ -424,7 +419,7 @@ where
     }
 }
 
-impl<'a, SPI, DELAY, TS> Clone for GraphReader<'a, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> Clone for GraphReader<SPI, DELAY, TS>
 where
     SPI: SpiDevice,
     DELAY: DelayNs,
@@ -447,13 +442,13 @@ where
     }
 }
 
-impl<'dir, SPI, DELAY, TS> linear::io::IoManager for GraphManager<'dir, SPI, DELAY, TS>
+impl<SPI, DELAY, TS> linear::io::IoManager for GraphManager<SPI, DELAY, TS>
 where
     SPI: SpiDevice,
     DELAY: DelayNs,
     TS: TimeSource,
 {
-    type Writer = GraphWriter<'dir, SPI, DELAY, TS>;
+    type Writer = GraphWriter<SPI, DELAY, TS>;
 
     fn create(&mut self, id: GraphId) -> Result<Self::Writer, StorageError> {
         println!("{}", format!("Create GraphId: {:?}", id).green());
@@ -501,29 +496,55 @@ where
 
         println!("{}", "Files Created".green());
         self.graph_id = id;
-        Ok(GraphWriter::<'dir>::new(
-            location_file,
-            data_file,
-            head_file,
-        ))
+        Ok(GraphWriter::new(location_file, data_file, head_file))
     }
 
-    fn open(&mut self, id: GraphId) -> Result<Option<Self>, aranya_runtime::StorageError> {
-        /*
+    // ! todo make this return Ok(None) if none exist instead of creating one and returning that
+    fn open(&mut self, id: GraphId) -> Result<Option<Self::Writer>, aranya_runtime::StorageError> {
         println!("{}", format!("Open GraphId: {:?}", id).green());
         println!("{}", "Open Files".green());
         // Check if file exists by opening in ReadOnly mode. Return error if it doesn't
-        let sd_manager = self.sd_manager;
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
-        sd_manager.with_file(&file_name, Mode::ReadOnly, 0, |_| Ok(()))?;
-        let file_name = truncate_filename(format!("h_{}.b", id), 8);
-        sd_manager.with_file(&file_name, Mode::ReadOnly, 0, |_| Ok(()))?;
+        let data_file = self
+            .directory
+            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
+            .map_err(|e| {
+                println!(
+                    "Error Opening File {} in Root Directory: {:?}",
+                    file_name,
+                    format!("{:?}", e).red()
+                );
+                StorageError::NoSuchStorage
+            })?;
+
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
-        sd_manager.with_file(&file_name, Mode::ReadOnly, 0, |_| Ok(()))?;
+        let location_file = self
+            .directory
+            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
+            .map_err(|e| {
+                println!(
+                    "Error Opening File {} in Root Directory: {:?}",
+                    file_name,
+                    format!("{:?}", e).red()
+                );
+                StorageError::NoSuchStorage
+            })?;
+
+        let file_name = truncate_filename(format!("h_{}.b", id), 8);
+        let head_file = self
+            .directory
+            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
+            .map_err(|e| {
+                println!(
+                    "Error Opening File {} in Root Directory: {:?}",
+                    file_name,
+                    format!("{:?}", e).red()
+                );
+                StorageError::NoSuchStorage
+            })?;
         println!("{}", "Files Opened".green());
         self.graph_id = id; // Update the graph_id to allow for opening different graphs
-        Ok(Some(self.clone()))
-        */
+        Ok(Some(GraphWriter::new(location_file, data_file, head_file)))
     }
 }
 

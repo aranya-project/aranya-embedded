@@ -1,8 +1,10 @@
 use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
+use aranya_crypto::keystore::memstore::MemStore;
 use aranya_crypto::{default::DefaultEngine, UserId};
 use aranya_crypto::{Engine, Rng};
 use aranya_policy_vm::{Machine, Module};
+use aranya_runtime::memory::MemStorageProvider;
 use aranya_runtime::{EngineError, PolicyId, VmEffect};
 use aranya_runtime::{FfiCallable, VmPolicy};
 use ciborium::de::from_reader;
@@ -28,7 +30,8 @@ where
         let (engine, _key) = DefaultEngine::from_entropy(Rng);
         // In memory crypto keystore
         // !TODO Make a on file keystore, not in memory.
-        let store = Store::new();
+        /*
+        let store = MemStore::new();
         // Meant to be unique for every user/device
         let user_id = UserId::random(&mut Rng);
         let ffis: Vec<Box<dyn FfiCallable<DefaultEngine> + Send + 'static>> = vec![
@@ -37,7 +40,7 @@ where
             Box::from(aranya_envelope_ffi::Ffi),
             Box::from(aranya_idam_ffi::Ffi::new(store)),
             Box::from(aranya_perspective_ffi::FfiPerspective),
-        ];
+        ];*/
         let policy = VmPolicy::new(machine, engine, Vec::new()).expect("Could not load policy");
         ESP32Engine { policy }
     }
