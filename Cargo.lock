@@ -186,18 +186,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "aranya-envelope-ffi"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3674c2d330ab3b02730d37b70be87959d9423be2b8d5cb65afb5403645d4596d"
-dependencies = [
- "aranya-crypto",
- "aranya-policy-vm",
- "tracing",
-]
-
-[[package]]
-name = "aranya-esp32"
+name = "aranya-embedded"
 version = "0.1.0"
 dependencies = [
  "aranya-base58",
@@ -241,6 +230,17 @@ dependencies = [
  "serde",
  "smoltcp",
  "static_cell",
+]
+
+[[package]]
+name = "aranya-envelope-ffi"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3674c2d330ab3b02730d37b70be87959d9423be2b8d5cb65afb5403645d4596d"
+dependencies = [
+ "aranya-crypto",
+ "aranya-policy-vm",
+ "tracing",
 ]
 
 [[package]]
