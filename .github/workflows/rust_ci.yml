@@ -14,7 +14,7 @@ env:
 jobs:
   rust-checks:
     name: Rust Checks
-    runs-on: self-hosted-linux-amd64  # Changed from ubuntu-latest
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
