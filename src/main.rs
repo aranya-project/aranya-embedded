@@ -15,6 +15,7 @@ use alloc::format;
 use aranya::graph_store::GraphManager;
 use aranya::sink::VecSink;
 use aranya_crypto::default::DefaultEngine;
+use aranya_crypto::Rng;
 use aranya_runtime::linear::LinearStorageProvider;
 use aranya_runtime::{ClientState, GraphId, PeerCache};
 use core::str::FromStr;
@@ -178,10 +179,10 @@ async fn main(spawner: Spawner) {
     );
 
     // todo collect correct graphID
-    //let manager = GraphManager::new(root_directory, GraphId::default());
+    let manager = GraphManager::new(root_directory, GraphId::random(&mut Rng));
 
-    //let policy = ESP32Engine::<DefaultEngine>::new();
-    //let client = ClientState::new(policy, LinearStorageProvider::new(manager));
+    let policy = ESP32Engine::<DefaultEngine>::new();
+    let client = ClientState::new(policy, LinearStorageProvider::new(manager));
 
     // Aranya Graph, Manager, and State Initialization
     // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action

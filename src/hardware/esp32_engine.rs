@@ -30,7 +30,7 @@ where
         let (engine, _key) = DefaultEngine::from_entropy(Rng);
         // In memory crypto keystore
         // !TODO Make a on file keystore, not in memory.
-        /*
+
         let store = MemStore::new();
         // Meant to be unique for every user/device
         let user_id = UserId::random(&mut Rng);
@@ -40,8 +40,8 @@ where
             Box::from(aranya_envelope_ffi::Ffi),
             Box::from(aranya_idam_ffi::Ffi::new(store)),
             Box::from(aranya_perspective_ffi::FfiPerspective),
-        ];*/
-        let policy = VmPolicy::new(machine, engine, Vec::new()).expect("Could not load policy");
+        ];
+        let policy = VmPolicy::new(machine, engine, ffis).expect("Could not load policy");
         ESP32Engine { policy }
     }
 }
