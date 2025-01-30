@@ -21,7 +21,7 @@ use aranya_runtime::{ClientState, GraphId, PeerCache};
 use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
-use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
+use embassy_net::{IpListenEndpoint, Ipv4Address, Runner, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -29,14 +29,15 @@ use embedded_sdmmc::{
     Directory, RawDirectory, RawVolume, SdCard, Timestamp, VolumeIdx, VolumeManager,
 };
 use esp_backtrace as _;
+use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
 use esp_hal::peripheral::Peripheral;
 use esp_hal::peripherals::TIMG1;
 use esp_hal::spi::master::{Config, Spi};
-use esp_hal::spi::SpiMode;
-use esp_hal::timer::timg::TimerX;
-use esp_hal::{prelude::*, timer::timg::TimerGroup};
+use esp_hal::spi::Mode;
+use esp_hal::time::RateExtU32;
+use esp_hal::timer::timg::TimerGroup;
 use esp_println::println;
 use esp_wifi::wifi::{WifiApDevice, WifiDevice};
 use esp_wifi::EspWifiController;
@@ -56,7 +57,7 @@ pub type Client = ClientState<
         GraphManager<
             ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
             Delay,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            Esp32TimeSource,
         >,
     >,
 >;
@@ -71,7 +72,7 @@ macro_rules! mk_static {
     }};
 }
 
-#[main]
+#[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
     init_heap();
 
@@ -122,14 +123,13 @@ async fn main(spawner: Spawner) {
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
     let cs = Output::new(peripherals.GPIO13, Level::High);
-    let spi = Spi::new_with_config(
+    let spi = Spi::new(
         peripherals.SPI2,
-        Config {
-            frequency: 100u32.kHz(),
-            mode: SpiMode::Mode0,
-            ..Default::default()
-        },
-    );
+        Config::default()
+            .with_frequency(100u32.kHz())
+            .with_mode(Mode::_0),
+    )
+    .unwrap();
     let spi = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
 
     // SD Card Initialization
@@ -154,7 +154,7 @@ async fn main(spawner: Spawner) {
     let volume_manager = mk_static!(
         VolumeManager<
             SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            Esp32TimeSource,
         >,
         VolumeManager::new(sd_card, esp_timer_source)
     );
@@ -170,7 +170,7 @@ async fn main(spawner: Spawner) {
         Directory<
             '_,
             SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            Esp32TimeSource,
             4,
             4,
             1,
@@ -207,21 +207,18 @@ async fn main(spawner: Spawner) {
     let seed = 1234; // Used for generating TCP/IP sequence numbers. //! Bad seed but acceptable for demonstration
 
     // Init network stack hosted on ESP32
-    let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiApDevice>>,
-        Stack::new(
-            wifi_interface,
-            config,
-            mk_static!(StackResources<16>, StackResources::<16>::new()),
-            seed
-        )
+    let (stack, runner) = embassy_net::new(
+        wifi_interface,
+        config,
+        mk_static!(StackResources<16>, StackResources::<16>::new()),
+        seed,
     );
 
     // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
     // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
     // Running the network stack for handling communication events
-    spawner.spawn(net_task(stack)).ok();
+    spawner.spawn(net_task(runner)).ok();
     // Running DHCP for internal IP setting
     spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
 

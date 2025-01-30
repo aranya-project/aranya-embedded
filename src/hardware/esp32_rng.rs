@@ -2,6 +2,8 @@ use esp_hal::rng::Rng;
 use getrandom::register_custom_getrandom;
 use getrandom::Error;
 
+// TODO: https://github.com/rust-random/getrandom/issues/397 use aranya-core's CSPRNG?
+
 // We need to provide a custom get random implementation for ESP32 due to Crypto's dependency getrandom not providing one for ESP32 (though it provides Rng providers for most OSes "https://docs.rs/getrandom/0.2.15/getrandom/")
 // If we don't provide an alternative Rng generator we get compiler error "target is not supported, for more information see: https://docs.rs/getrandom/#unsupported-targets"
 pub fn esp32_getrandom(buf: &mut [u8]) -> Result<(), Error> {

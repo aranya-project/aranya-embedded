@@ -1,20 +1,17 @@
 use core::str::FromStr;
 
-use embassy_net::Stack;
+use embassy_net::{Runner, Stack};
 use embassy_time::{Duration, Timer};
 use esp_println::println;
 use esp_wifi::wifi::{
-    Configuration, WifiApDevice, WifiController, WifiDevice, WifiEvent, WifiState,
+    Configuration, WifiApDevice, WifiController, WifiDevice, WifiEvent, WifiState
 };
 
 use crate::built::wifi_config::wifi_config;
 
 /// This gives each device connecting there own Ipv4 address
 #[embassy_executor::task]
-pub async fn run_dhcp(
-    stack: &'static Stack<WifiDevice<'static, WifiApDevice>>,
-    gw_ip_addr: &'static str,
-) {
+pub async fn run_dhcp(stack: Stack<'static>, gw_ip_addr: &'static str) {
     use core::net::{Ipv4Addr, SocketAddrV4};
 
     use edge_dhcp::{
@@ -42,7 +39,7 @@ pub async fn run_dhcp(
 
     loop {
         _ = io::server::run(
-            &mut Server::<64>::new(ip),
+            &mut Server::<_, 64>::new_with_et(ip),
             &ServerOptions::new(ip, Some(&mut gw_buf)),
             &mut bound_socket,
             &mut buf,
@@ -77,6 +74,6 @@ pub async fn connection(mut controller: WifiController<'static>) {
 
 /// This runs the entirety of the network stack
 #[embassy_executor::task]
-pub async fn net_task(stack: &'static Stack<WifiDevice<'static, WifiApDevice>>) {
-    stack.run().await
+pub async fn net_task(mut runner: Runner<'static, WifiDevice<'static, WifiApDevice>>) {
+    runner.run().await
 }
