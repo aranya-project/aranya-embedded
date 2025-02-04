@@ -858,6 +858,7 @@ dependencies = [
  "critical-section",
  "document-features",
  "embassy-executor-macros",
+ "log",
 ]
 
 [[package]]
@@ -891,6 +892,7 @@ dependencies = [
  "embedded-io-async",
  "embedded-nal-async",
  "heapless 0.8.0",
+ "log",
  "managed",
  "smoltcp",
 ]
@@ -930,6 +932,7 @@ dependencies = [
  "embedded-hal 1.0.0",
  "embedded-hal-async",
  "futures-util",
+ "log",
 ]
 
 [[package]]
@@ -1010,6 +1013,7 @@ checksum = "513e0b3a8fb7d3013a8ae17a834283f170deaf7d0eeab0a7c1a36ad4dd356d22"
 dependencies = [
  "critical-section",
  "embedded-hal 1.0.0",
+ "embedded-hal-async",
 ]
 
 [[package]]
@@ -1251,6 +1255,7 @@ dependencies = [
  "esp-hal",
  "esp-hal-procmacros",
  "esp-metadata",
+ "log",
  "portable-atomic",
  "static_cell",
 ]
@@ -2339,6 +2344,7 @@ dependencies = [
  "byteorder",
  "cfg-if",
  "heapless 0.8.0",
+ "log",
  "managed",
 ]
 

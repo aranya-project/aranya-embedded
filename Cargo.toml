@@ -4,25 +4,42 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# Backtrace support for ESP32
 esp-backtrace = { version = "0.15", features = [
     "esp32s3",
     "exception-handler",
     "panic-handler",
     "println",
-]}
-
-esp-hal = { version = "0.23", features = [
-    "esp32s3",
+    "halt-cores",        # stop both cores on the S3
 ] }
-esp-println = { version = "0.13", features = ["esp32s3", "log"] }
-log = { version = "0.4" }
-esp-alloc = { version = "0.6" }
-embedded-io = "0.6"
 
-embedded-io-async = "0.6"
-embassy-net = { version = "0.6", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+esp-hal = { version = "0.23", default-features = false, features = [
+    "esp32s3",
+    "log",
+    "quad-psram", # all Lilygo S3 boards use quad-SPI
+] }
+esp-println = { version = "0.13", default-features = false, features = [
+    "esp32s3",
+    "auto",             # Switch between JTAG and UART
+    "log",
+    "colors",
+    "critical-section", # thread-safety for S3
+] }
+log = { version = "0.4" } #features=["kv_sval"] if we need key-value
+esp-alloc = { version = "0.6", features = ["nightly"] }
+embedded-io = { version = "0.6", features = ["alloc"] }
+embedded-io-async = { version = "0.6", features = ["alloc"] }
+embassy-net = { version = "0.6", features = [
+    "log",
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+    "proto-ipv4",
+    #"proto-ipv6",
+] }
 
-esp-wifi = { version = "0.12", default-features=false, features = [
+esp-wifi = { version = "0.12", default-features = false, features = [
     "esp32s3",
     "utils",
     "wifi",
@@ -31,35 +48,37 @@ esp-wifi = { version = "0.12", default-features=false, features = [
 ] }
 heapless = { version = "0.8", default-features = false }
 smoltcp = { version = "0.12", default-features = false, features = [
+    #"alloc", #pulls in defmt
+    "async",
+    "log",
     "medium-ethernet",
     "proto-dhcpv4",
-    "multicast",
     "proto-ipv4",
+    "proto-ipv4-fragmentation",
+    #"proto-ipv6",
+    #"proto-ipv6-fragmentation",
     "socket-dhcpv4",
-    "socket-icmp",
-    "socket-raw",
     "socket-tcp",
     "socket-udp",
+    #"assembler-max-segment-count-8", # defaults to 4, might need to be tuned for disrupted networks
 ] }
-embassy-executor = { version = "0.7",  features = [
-    "task-arena-size-12288",
-] }
-embassy-time     = { version = "0.4",  features = ["generic-queue-8"] }
-esp-hal-embassy  = { version = "0.6",  features = ["esp32s3"] }
-static_cell      = { version = "~2.1",  features = ["nightly"] }
+embassy-executor = { version = "0.7", features = ["nightly", "log", "executor-thread"] }
+embassy-time = { version = "0.4", features = ["generic-queue-64", "log"] }
+esp-hal-embassy = { version = "0.6", features = ["esp32s3", "log"] }
+static_cell = { version = "~2.1", features = ["nightly"] }
 critical-section = "~1.2"
-enumset = "1.1.5"
+enumset = { version = "1.1.5", features = ["alloc"] }
 edge-dhcp = "0.5.0"
 edge-nal = "0.5.0"
 edge-nal-embassy = "0.5.0"
 # Used git as read is still with mutable ref in the crate
-embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
-embedded-hal-bus = "0.3.0"
-owo-colors = "4.1.0"
+embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs", features = ["log"] }
+embedded-hal-bus = { version = "0.3.0", features = ["alloc", "async"] } #, "portable-atomic"?
+owo-colors = { version = "4.1.0", features = ["alloc"] }
 embedded-hal = "1.0.0"
 ciborium = { version = "0.2.2", default-features = false }
 getrandom = { version = "0.2.15", features = ["custom"] }
-postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
+postcard = { version = "1.0.10", default-features = false, features = ["alloc", "embedded-io-06"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 aranya-runtime = "0.3.0"
 aranya-policy-vm = "0.3.1"
