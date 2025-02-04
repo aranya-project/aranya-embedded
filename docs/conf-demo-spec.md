@@ -41,15 +41,22 @@ The code listing need only show the calls to the Aranya APIs and we should attem
 
 ### BOM
 
+This is the Bill of Materials (BOM) for the version of this demo that uses on-board LEDs. The buttons might be optional if we choose a board with an on-board programmable button like the Cytron Maker Feather AIOT S3.
+
 | Item | Qty | Details |
 | ---- | --- | ------- |
 | Laptop | 1 | Mac or Linux |
-| Microcontroller | 4 | - |
-| RGB LED | 4 | - |
-| 100 Ohm Resistor | 4 | For LED |
+| Microcontroller | 4 | See options below |
 | Button | 4 | - |
-| 3d Printed Housing | 4 | Should hold the microcontroller and have easily accessible and understandable buttons. |
-| IrDA hardware | 5 | Need an IrDA module for the laptop |
+| IrDA hardware | 4 | Laptop can use serial/bluetooth/wifi for talking to the microcontrollers |
+
+
+#### Board Options
+
+| Board | Memory | Details |
+| ----- | ------ | ------- |
+| [Adafruit ESP32-S3 Feather](https://www.adafruit.com/product/5477) | 2MB | LED on board, lipo power circuit |
+| [Cytron Maker Feather AIOT S3](https://www.cytron.io/p-v-maker-feather-aiot-s3-simplifying-aiot-with-esp32) | 8MB | LED on board, Single-cell LiPo connector, piezo buzzer, programmable button | 
 
 
 ## TODOs
@@ -65,6 +72,7 @@ The code listing need only show the calls to the Aranya APIs and we should attem
     - Device flashing procedure
     - Device Aranya integration
     - Device assembley procedure
+    - Peripheral integration (IrDA)
 - Management Software
     - Standalone application for managing devices
     - Can initiate onboarding with a device
