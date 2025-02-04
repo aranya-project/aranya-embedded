@@ -4,35 +4,36 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-esp-backtrace = { version = "0.15.0", features = [
-    "esp32",
+esp-backtrace = { version = "0.15", features = [
+    "esp32s3",
     "exception-handler",
     "panic-handler",
     "println",
 ]}
 
-esp-hal = { version = "0.23.1", features = [
-    "esp32",
+esp-hal = { version = "0.23", features = [
+    "esp32s3",
 ] }
-esp-println = { version = "0.13.0", features = ["esp32", "log"] }
-log = { version = "0.4.21" }
-esp-alloc = { version = "0.6.0" }
-embedded-io = "0.6.1"
+esp-println = { version = "0.13", features = ["esp32s3", "log"] }
+log = { version = "0.4" }
+esp-alloc = { version = "0.6" }
+embedded-io = "0.6"
 
-embedded-io-async = "0.6.1"
-embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+embedded-io-async = "0.6"
+embassy-net = { version = "0.6", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
 
-esp-wifi = { version = "0.12.0", default-features=false, features = [
-    "esp32",
+esp-wifi = { version = "0.12", default-features=false, features = [
+    "esp32s3",
     "utils",
     "wifi",
     "esp-alloc",
     "log",
 ] }
-heapless = { version = "0.8.0", default-features = false }
-smoltcp = { version = "0.12.0", default-features = false, features = [
+heapless = { version = "0.8", default-features = false }
+smoltcp = { version = "0.12", default-features = false, features = [
     "medium-ethernet",
     "proto-dhcpv4",
+    "multicast",
     "proto-ipv4",
     "socket-dhcpv4",
     "socket-icmp",
@@ -40,17 +41,17 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
 ] }
-embassy-executor = { version = "0.7.0",  features = [
-    "nightly",
+embassy-executor = { version = "0.7",  features = [
+    "task-arena-size-12288",
 ] }
-embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
-esp-hal-embassy  = { version = "0.6.0",  features = ["esp32"] }
-static_cell      = { version = "2.1.0", features = ["nightly"] }
+embassy-time     = { version = "0.4",  features = ["generic-queue-8"] }
+esp-hal-embassy  = { version = "0.6",  features = ["esp32s3"] }
+static_cell      = { version = "~2.1",  features = ["nightly"] }
+critical-section = "~1.2"
 enumset = "1.1.5"
 edge-dhcp = "0.5.0"
 edge-nal = "0.5.0"
 edge-nal-embassy = "0.5.0"
-critical-section = "1.2.0"
 # Used git as read is still with mutable ref in the crate
 embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
 embedded-hal-bus = "0.3.0"
