@@ -1,0 +1,36 @@
+[package]
+name = "aranya-idf-embedded"
+version = "0.1.0"
+authors = ["nikki-aranya <npoelma@spideroak.com>"]
+edition = "2021"
+resolver = "2"
+rust-version = "1.84"
+
+[[bin]]
+name = "aranya-idf-embedded"
+harness = false # do not use the built in cargo test harness -> resolve rust-analyzer errors
+
+[profile.release]
+debug = true    # Symbols are nice and they don't increase the size on Flash
+opt-level = "s"
+lto = true
+codegen-units = 1
+#panic = "abort"
+
+[profile.dev]
+debug = true    # Symbols are nice and they don't increase the size on Flash
+opt-level = "z"
+
+[features]
+default = []
+
+[dependencies]
+anyhow = "1"
+log = "0.4"
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync", "experimental"] }
+
+[build-dependencies]
+embuild = "0.33"
+
+[[package.metadata.esp-idf-sys.extra_components]]
+remote_component = { name = "joltwallet/littlefs", version = "1.16" }
