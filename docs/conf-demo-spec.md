@@ -29,7 +29,7 @@ We would like the demo to consist of:
 
 In the demo we want to show the easy onboarding and off-boarding of devices and the assignment roles and permissions using the admin station.
 
-On the microcontrollers, we want each to have an assigned color, a button, and and multi color LED. When the button is pressed the others devices should light up in the assigned color. Communication between devices should be via IR. Using IR will allow us to easy partition and degrade the network. Each microcontroller will be labeled with a specific color to indicate what color it will change the network to when pressed.
+On the microcontrollers, we want each to have an assigned color, a button, and and multi color LED. When the button is pressed the others devices should light up in the assigned color. Communication between devices should be via IR. Using IR will allow us to easy partition and degrade the network. Each microcontroller will be labeled with a specific color to indicate what color it will change the network to when pressed. We will either need to label the microcontrollers with their associated colors, or have the LED light up with it's assigned color.
 
 The code listing need only show the calls to the Aranya APIs and we should attempt to fit it on a single page emphasizing how easy it is to integrate Aranya in to a system.
 
@@ -41,15 +41,14 @@ The code listing need only show the calls to the Aranya APIs and we should attem
 
 ### BOM
 
-This is the Bill of Materials (BOM) for the version of this demo that uses on-board LEDs. The buttons might be optional if we choose a board with an on-board programmable button like the Cytron Maker Feather AIOT S3.
+This is the Bill of Materials (BOM) for the version of this demo that uses on-board LEDs and button. 
 
 | Item | Qty | Details |
 | ---- | --- | ------- |
 | Laptop | 1 | Mac or Linux |
-| Microcontroller | 4 | See options below |
-| Button | 4 | - |
+| Adafruit ESP32-S3 Feather | 4 | - |
 | IrDA hardware | 4 | Laptop can use serial/bluetooth/wifi for talking to the microcontrollers |
-| Battery | 4 | 500+ mAh |
+| Battery | 4+ | 500+ mAh |
 
 
 #### Board Options
@@ -59,6 +58,7 @@ This is the Bill of Materials (BOM) for the version of this demo that uses on-bo
 | [Adafruit ESP32-S3 Feather](https://www.adafruit.com/product/5477) | 2MB | LED on board, lipo power circuit |
 | [Cytron Maker Feather AIOT S3](https://www.cytron.io/p-v-maker-feather-aiot-s3-simplifying-aiot-with-esp32) | 8MB | LED on board, Single-cell LiPo connector, piezo buzzer, programmable button | 
 
+Current plan is to use the Adafruit ESP32-S3 Feather. It has the button and LED we need, so we only need to attach the battery and IrDA module. It also ships from a domestic location.
 
 ## TODOs
 
