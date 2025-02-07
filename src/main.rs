@@ -1,8 +1,17 @@
 use std::fs::File;
 use std::io::prelude::*;
 
+use aranya_runtime::memory::MemStorageProvider;
+use aranya_runtime::{vm_action, ClientState};
+use engine::PolicyEngine;
 use esp_idf_svc::fs::littlefs::Littlefs;
 use esp_idf_svc::io::vfs::MountedLittlefs;
+
+//mod keystore;
+mod error;
+mod engine;
+mod storage;
+mod policy;
 
 fn main() -> anyhow::Result<()> {
     // It is necessary to call this function once. Otherwise some patches to the runtime
@@ -37,6 +46,13 @@ fn main() -> anyhow::Result<()> {
         info.total_bytes,
         info.used_bytes
     );
+
+    let provider = MemStorageProvider::new();
+    let client = ClientState::new(PolicyEngine, provider);
+    //load_or_gen_public_keys
+    
+    /*client.new_graph(&[0], vm_action!(create_team(owner_keys, 
+        nonce.unwrap_or(&Rng.bytes::<[u8; 16]>()))), VecSink);*/
 
     Ok(())
 }

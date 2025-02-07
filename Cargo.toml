@@ -25,9 +25,18 @@ opt-level = "z"
 default = []
 
 [dependencies]
+buggy = "0.1"
+aranya-crypto = { version = "0.2", path = "../aranya-core/crates/aranya-crypto" }
+#aranya-keygen = { version = "0.3", path = "../aranya-core/crates/aranya-keygen" }
+aranya-policy-ifgen = { version = "0.3", path = "../aranya-core/crates/aranya-policy-ifgen" }
+aranya-policy-vm = { version = "0.3", path = "../aranya-core/crates/aranya-policy-vm" }
+aranya-runtime = { version = "0.3", path = "../aranya-core/crates/aranya-runtime" }
+
+esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync", "experimental"] }
+
 anyhow = "1"
 log = "0.4"
-esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync", "experimental"] }
+thiserror = "2"
 
 [build-dependencies]
 embuild = "0.33"
