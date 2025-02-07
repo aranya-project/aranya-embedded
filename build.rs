@@ -6,8 +6,7 @@ use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
 use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
 use aranya_policy_vm::Module;
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
+use rkyv::rancor::Error;
 use ron::de::from_str;
 use serde::Deserialize;
 use std::env;
@@ -131,8 +130,8 @@ fn aranya_setup() {
         aranya_envelope_ffi::Ffi::SCHEMA,
         aranya_crypto_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
         aranya_device_ffi::FfiDevice::SCHEMA,
-        aranya_idam_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
         aranya_perspective_ffi::FfiPerspective::SCHEMA,
+        aranya_idam_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
     ];
     // Parse policy
     let ast =
@@ -146,8 +145,7 @@ fn aranya_setup() {
 
     // Serialize module
     // ! Find out why postcard fails
-    let mut serialized = Vec::new();
-    into_writer(&module, &mut serialized).expect("Failed to serialize Module");
+    let serialized = rkyv::to_bytes::<Error>(&module).expect("Failed to serialize Module");
 
     // Write to src/policy.rs
     let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -165,5 +163,5 @@ fn aranya_setup() {
 
     // Verify deserialization ability
     let _: Module =
-        from_reader(&serialized[..]).expect("Failed to deserialize Module in build script");
+        rkyv::from_bytes::<Module, Error>(&serialized).expect("Failed to serialize Module");
 }

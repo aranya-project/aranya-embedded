@@ -4,8 +4,6 @@ use alloc::vec::Vec;
 use alloc::{format, vec};
 use aranya_crypto::default;
 use aranya_runtime::{linear, GraphId, Location, StorageError};
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
 use embedded_hal::delay::DelayNs;
 use embedded_hal::spi::SpiDevice;
 use embedded_sdmmc::{
@@ -160,8 +158,7 @@ where
             "{}",
             "Built Data from Builder using End of Data File".green()
         );
-        let mut serialized_data = Vec::new();
-        into_writer(&data, &mut serialized_data).map_err(|e| {
+        let serialized_data = to_allocvec(&data).map_err(|e| {
             println!("Failed to Serialize Module: {:?}", format!("{:?}", e).red());
             StorageError::IoError
         })?;
@@ -407,7 +404,7 @@ where
             )
             .blue()
         );
-        let deserialized_u: T = from_reader(&serialize_vec[..]).map_err(|e| {
+        let deserialized_u: T = from_bytes(&serialize_vec[..]).map_err(|e| {
             println!(
                 "Failed to Deserialize Module: {:?}",
                 format!("{:?}", e).red()

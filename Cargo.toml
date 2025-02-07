@@ -57,35 +57,35 @@ embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sd
 embedded-hal-bus = "0.2.0"
 owo-colors = "4.1.0"
 embedded-hal = "1.0.0"
-ciborium = { version = "0.2.2", default-features = false }
 getrandom = { version = "0.2.15", features = ["custom"] }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
-aranya-runtime = "0.3.0"
-aranya-policy-vm = "0.3.1"
-aranya-crypto = "0.2.1"
-aranya-envelope-ffi = "0.3.0"
-aranya-crypto-ffi = "0.3.0"
-aranya-device-ffi = "0.3.0"
-aranya-idam-ffi = "0.3.0"
-aranya-perspective-ffi = "0.3.0"
+aranya-runtime = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-runtime" }
+aranya-policy-vm = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-vm" }
+aranya-crypto = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto" }
+aranya-envelope-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-envelope-ffi" }
+aranya-crypto-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto-ffi" }
+aranya-device-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-device-ffi" }
+aranya-idam-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-idam-ffi" }
+aranya-perspective-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-perspective-ffi" }
 aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
+rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [build-dependencies]
 ron = "0.8.1"
 serde = {version = "1.0.215", features = ["derive"] }
-aranya-policy-lang = "0.1.0"
-aranya-policy-compiler = "0.3.0"
-aranya-policy-vm = "0.3.1"
-ciborium = { version = "0.2.2", default-features = false }
-aranya-runtime = "0.3.0"
-aranya-envelope-ffi = "0.3.0"
-aranya-crypto-ffi = "0.3.0"
-aranya-device-ffi = "0.3.0"
-aranya-crypto = "0.2.1"
-aranya-idam-ffi = "0.3.0"
-aranya-perspective-ffi = "0.3.0"
+aranya-policy-lang = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-lang" }
+aranya-policy-compiler = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-compiler" }
+aranya-policy-vm = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-vm" }
+aranya-runtime = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-runtime" }
+aranya-envelope-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-envelope-ffi" }
+aranya-crypto-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto-ffi" }
+aranya-device-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-device-ffi" }
+aranya-crypto = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto" }
+aranya-idam-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-idam-ffi" }
+aranya-perspective-ffi = {git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-perspective-ffi"}
+rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [profile.dev]
 # Rust debug is too slow.

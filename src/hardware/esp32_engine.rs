@@ -7,7 +7,8 @@ use aranya_policy_vm::{Machine, Module};
 use aranya_runtime::memory::MemStorageProvider;
 use aranya_runtime::{EngineError, PolicyId, VmEffect};
 use aranya_runtime::{FfiCallable, VmPolicy};
-use ciborium::de::from_reader;
+use rkyv::rancor::Error;
+use rkyv::util::AlignedVec;
 
 pub const SERIALIZED_POLICY: &[u8] = include_bytes!("../built/serialized_policy.bin");
 
@@ -25,7 +26,11 @@ where
     E: Engine,
 {
     pub fn new() -> ESP32Engine<DefaultEngine> {
-        let module: Module = from_reader(SERIALIZED_POLICY).expect("Failed to deserialize Module");
+        // Setting alignment 8 prevents errors in deserialization
+        let mut vec = AlignedVec::<8>::new();
+        vec.extend_from_slice(SERIALIZED_POLICY);
+        let module: Module =
+            rkyv::from_bytes::<Module, Error>(&vec).expect("Failed to serialize Module");
         let machine = Machine::from_module(module).expect("Couldn't get machine from module");
         let (engine, _key) = DefaultEngine::from_entropy(Rng);
         // In memory crypto keystore

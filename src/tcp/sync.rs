@@ -1,19 +1,25 @@
-use alloc::{boxed::Box, vec::Vec};
+use alloc::{boxed::Box, format, vec::Vec};
 use aranya_crypto::{Csprng, Rng};
+use aranya_policy_vm::Value;
 use aranya_runtime::{
     CommandMeta, GraphId, PeerCache, StorageProvider, SyncError, SyncRequester, VmEffect,
 };
-use core::{fmt, marker::PhantomData};
+use core::{cell::UnsafeCell, fmt, marker::PhantomData};
 use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Timer};
+use embedded_io::{ReadReady, WriteReady};
 use embedded_io_async::{Read, Write};
+use esp_hal::gpio::Output;
 use esp_println::println;
+use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_slice};
-use serde::{Deserialize, Serialize};
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{aranya::sink::VecSink, Client};
 
-use super::format::{read_prefix, write_prefix, Command, Subject};
+use super::format::Commands;
+
+static mut LED: UnsafeCell<Option<Output<'static>>> = UnsafeCell::new(None);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub enum Message {
@@ -38,11 +44,16 @@ pub enum Message {
 }
 
 const MAX_MESSAGE_SIZE: usize = 1024; // Match the TCP buffer size
-const PREFIX_LEN: usize = 3; // 2 bytes are used for configuring prefix
+const MAX_RETRY_TIME_MS: u64 = 1000; // Maximum retry time of 1 second
+const RETRY_DELAY_MS: u64 = 100; // Delay between retries (0.1s)
+
+#[derive(Deserialize, Serialize, Clone)]
+pub struct ServerStub;
 
 pub struct TcpSyncHandler<'a> {
     socket: TcpSocket<'a>,
-    sync_requester: Option<SyncRequester<'a>>,
+    sync_requester: Option<SyncRequester<'a, ServerStub>>,
+    graph_id: Option<GraphId>,
     buffer: [u8; MAX_MESSAGE_SIZE],
     client: Client,
     peer_cache: PeerCache,
@@ -59,7 +70,9 @@ impl<'a> TcpSyncHandler<'a> {
     ) -> Self {
         Self {
             socket,
-            sync_requester: storage_id.map(|storage_id| SyncRequester::new(storage_id, &mut Rng)),
+            graph_id: storage_id,
+            sync_requester: storage_id
+                .map(|storage_id| SyncRequester::new(storage_id, &mut Rng, ServerStub)),
             buffer: [0u8; MAX_MESSAGE_SIZE],
             client,
             peer_cache,
@@ -67,37 +80,85 @@ impl<'a> TcpSyncHandler<'a> {
         }
     }
 
+    async fn send_message(&mut self, command: Commands) -> Result<(), SyncError> {
+        // Check if socket is ready to write
+        if !self.socket.write_ready().map_err(|_| SyncError::NotReady)? {
+            return Err(SyncError::NotReady);
+        }
+
+        // Serialize the command using postcard
+        let serialized =
+            to_slice(&command, &mut self.buffer).map_err(|e| SyncError::Serialize(e))?;
+
+        // Send the serialized data
+        self.socket
+            .write_all(serialized)
+            .await
+            .map_err(|_| SyncError::NotReady)
+    }
+
+    // todo: Make a recoverable error
+    async fn receive_message(&mut self) -> Result<Commands, SyncError> {
+        // Check if socket is ready to read
+        if !self.socket.read_ready().map_err(|_| SyncError::NotReady)? {
+            return Err(SyncError::NotReady);
+        }
+
+        let start_time = embassy_time::Instant::now();
+        let timeout = Duration::from_millis(MAX_RETRY_TIME_MS);
+
+        let mut temp_buffer = [0u8; MAX_MESSAGE_SIZE];
+        let mut read_position = 0usize;
+
+        loop {
+            // Check timeout
+            if start_time.elapsed() > timeout {
+                self.send_message(Commands::DeserializeError).await?;
+                return Err(SyncError::Serialize(
+                    postcard::Error::DeserializeUnexpectedEnd,
+                ));
+            }
+
+            // Try to read data into our temporary buffer
+            match self.socket.read(&mut temp_buffer[read_position..]).await {
+                Ok(n) => {
+                    read_position += n;
+                    if read_position >= MAX_MESSAGE_SIZE {
+                        self.send_message(Commands::DeserializeError).await?;
+                        return Err(SyncError::Serialize(
+                            postcard::Error::DeserializeUnexpectedEnd,
+                        ));
+                    }
+                    // Try to deserialize all that has been written to the temporary buffer
+                    match from_bytes::<Commands>(&temp_buffer[..read_position]) {
+                        Ok(command) => return Ok(command),
+                        Err(_) => {
+                            Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
+                        }
+                    }
+                }
+                Err(_) => return Err(SyncError::NotReady),
+            }
+        }
+    }
+
     pub async fn handle_connection(&mut self) -> Result<(), SyncError> {
         loop {
-            if let Some(sync_requester) = &mut self.sync_requester {
+            if self.sync_requester.is_some() {
                 println!("Sync Requester Exists");
                 loop {
                     // Check if requester has a message to send
-                    if sync_requester.ready() {
+                    if self.sync_requester.as_ref().unwrap().ready() {
                         // Poll the requester for a message
-                        match sync_requester.poll(
+                        match self.sync_requester.as_mut().unwrap().poll(
                             &mut self.buffer,
                             self.client.provider(),
                             &mut self.peer_cache,
                         ) {
                             Ok((written, _)) => {
-                                // Send prefix
-                                let mut prefix_buf: [u8; 3] = [0; PREFIX_LEN];
-                                write_prefix(
-                                    &mut prefix_buf,
-                                    written as u16,
-                                    Command::Set(Subject::Sync),
-                                );
-                                self.socket
-                                    .write_all(&prefix_buf)
-                                    .await
-                                    .map_err(|_| SyncError::NotReady)?;
-
-                                // Send message
-                                self.socket
-                                    .write_all(&self.buffer[..written])
-                                    .await
-                                    .map_err(|_| SyncError::NotReady)?;
+                                let sync_data = Vec::from(&self.buffer[..written]);
+                                let command = Commands::SendSyncRequest(sync_data);
+                                self.send_message(command).await?;
                             }
                             Err(e) => {
                                 println!("Error polling requester: {:?}", e);
@@ -106,118 +167,142 @@ impl<'a> TcpSyncHandler<'a> {
                         }
                     }
 
-                    // Read response
-                    // First read length prefix
-                    let mut len_bytes: [u8; 3] = [0u8; PREFIX_LEN];
-                    // ! Potentially add a timeout which clears the buffer in case
-                    match self.socket.read_exact(&mut len_bytes).await {
-                        Ok(_) => {}
-                        Err(_) => return Err(SyncError::NotReady),
-                    }
-
-                    // todo: Overall handle errors like this better
-                    let (prefix_commands, length) =
-                        read_prefix(&len_bytes).expect("Failed to unwrap message prefix");
-                    let message_len = length as usize;
-                    if message_len as usize > MAX_MESSAGE_SIZE {
-                        return Err(SyncError::CommandOverflow);
-                    }
-
                     // Read message
-                    match self
-                        .socket
-                        .read_exact(&mut self.buffer[..message_len])
-                        .await
-                    {
-                        Ok(_) => {}
-                        Err(_) => return Err(SyncError::NotReady),
-                    }
-
-                    // Process received message
-                    match sync_requester.receive(&self.buffer[..message_len]) {
-                        Ok(Some(commands)) => {
-                            println!("Received Commands: {:?}", commands);
-                            if !commands.is_empty() {
-                                let mut trx = self.client.transaction(GraphId::default());
-                                self.client
-                                    .add_commands(
-                                        &mut trx,
-                                        &mut self.effect_sink,
-                                        &commands,
+                    match self.receive_message().await {
+                        Ok(command) => match command {
+                            // todo get rif of unwraps
+                            Commands::GetGraphID => {
+                                self.send_message(Commands::SendGraphID(self.graph_id.unwrap()))
+                                    .await?
+                            }
+                            Commands::SendGraphID(graph_id) => {}
+                            Commands::GetSyncRequest => {
+                                if self.sync_requester.as_ref().unwrap().ready() {
+                                    // Poll the requester for a message
+                                    match self.sync_requester.as_mut().unwrap().poll(
+                                        &mut self.buffer,
+                                        self.client.provider(),
                                         &mut self.peer_cache,
-                                    )
-                                    .expect("Unable to add recieved commands");
-                                self.client
-                                    .commit(&mut trx, &mut self.effect_sink)
-                                    .expect("Commit Failed");
-                                println!("Committed to Graph");
+                                    ) {
+                                        Ok((written, _)) => {
+                                            let sync_data = Vec::from(&self.buffer[..written]);
+                                            let command = Commands::SendSyncRequest(sync_data);
+                                            self.send_message(command).await?;
+                                        }
+                                        Err(e) => {
+                                            println!("Error polling requester: {:?}", e);
+                                            return Err(e);
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        Ok(None) => {}
-                        Err(e) => {
-                            println!("Error processing message: {:?}", e);
-                            if matches!(e, SyncError::SessionMismatch) {
-                                break;
+                            Commands::SendSyncRequest(sync_data) => {
+                                match self.sync_requester.as_mut().unwrap().receive(&sync_data)? {
+                                    Some(sync_commands) => {
+                                        println!("Recieved Commands: {:?}", sync_commands);
+                                        if !sync_commands.is_empty() {
+                                            let mut trx =
+                                                self.client.transaction(self.graph_id.unwrap());
+                                            self.client
+                                                .add_commands(
+                                                    &mut trx,
+                                                    &mut self.effect_sink,
+                                                    &sync_commands,
+                                                    &mut self.peer_cache,
+                                                )
+                                                .expect("Unable to add recieved commands");
+                                            self.client
+                                                .commit(&mut trx, &mut self.effect_sink)
+                                                .expect("commit failed");
+                                            println!("committed");
+                                            println!("{:?}", self.effect_sink)
+                                        }
+                                        if let Some(last_effect) =
+                                            remove_first(&mut self.effect_sink.effects)
+                                        {
+                                            if last_effect.name == "LEDBool" {
+                                                if let Some(kv_pair) = last_effect
+                                                    .fields
+                                                    .iter()
+                                                    .find(|kv| kv.key() == "on")
+                                                {
+                                                    println!(
+                                                        "{}",
+                                                        "Action Call based on bool".green()
+                                                    );
+                                                    match kv_pair.value() {
+                                                        Value::Bool(state) => {
+                                                            match unsafe { &mut *LED.get() } {
+                                                                Some(led) => led_control(*state, led),
+                                                                None => println!("LED peripheral not initialized"),
+                                                            };
+                                                        }
+                                                        _ => {
+                                                            println!(
+                                                                "{}",
+                                                                format!(
+                                                                    "Unexpected Value type for LED State: {:?}",
+                                                                    kv_pair.value()
+                                                                )
+                                                                .yellow()
+                                                            );
+                                                        }
+                                                    }
+                                                } else {
+                                                    println!(
+                                                        "{}",
+                                                        "'on' Field not Found in LEDBool Effect"
+                                                            .yellow()
+                                                    );
+                                                }
+                                            } else {
+                                                println!(
+                                                    "{}",
+                                                    format!(
+                                                        "Unexpected Effect: {:?}",
+                                                        last_effect.name
+                                                    )
+                                                    .yellow()
+                                                );
+                                            }
+                                        } else {
+                                            println!("{}", "No Effect Present".yellow());
+                                            Timer::after_secs(1).await;
+                                        }
+                                    }
+                                    None => {
+                                        println!("No Data")
+                                    }
+                                }
                             }
-                        }
+                            Commands::DeserializeError => todo!(),
+                        },
+                        Err(_) => todo!(),
                     }
                 }
             } else {
                 println!("Asking for GraphId");
                 {
-                    let mut prefix_buf: [u8; 3] = [0; PREFIX_LEN];
-                    write_prefix(&mut prefix_buf, 0, Command::Get(Subject::GraphId));
-                    self.socket
-                        .write_all(&prefix_buf)
-                        .await
-                        .map_err(|_| SyncError::NotReady)?;
-
-                    // Send message
-                    self.socket
-                        .write_all(&self.buffer[..0])
-                        .await
-                        .map_err(|_| SyncError::NotReady)?;
+                    let command = Commands::GetGraphID;
+                    self.send_message(command).await?;
                 }
 
                 // try to read GraphId
                 {
-                    // Read response
-                    // First read length prefix
-                    let mut len_bytes: [u8; 3] = [0u8; PREFIX_LEN];
-                    // ! Potentially add a timeout which clears the buffer in case
-                    match self.socket.read_exact(&mut len_bytes).await {
-                        Ok(_) => {}
-                        Err(_) => return Err(SyncError::NotReady),
-                    }
-
-                    // todo: Overall handle errors like this better
-                    let (prefix_commands, length) =
-                        read_prefix(&len_bytes).expect("Failed to unwrap message prefix");
-                    let message_len = length as usize;
-                    if message_len > MAX_MESSAGE_SIZE {
-                        return Err(SyncError::CommandOverflow);
-                    }
-
-                    // Read message
-                    match self
-                        .socket
-                        .read_exact(&mut self.buffer[..message_len])
-                        .await
-                    {
-                        Ok(_) => {}
-                        Err(_) => return Err(SyncError::NotReady),
-                    }
-
-                    match prefix_commands {
-                        // todo Shouldn't be getting at this point
-                        Command::Set(Subject::GraphId) => {
-                            let graph_id: GraphId =
-                                from_bytes::<GraphId>(&self.buffer[..message_len])?;
-                            self.sync_requester = Some(SyncRequester::new(graph_id, &mut Rng));
-                        }
-                        _ => {
-                            Timer::after(Duration::from_millis(250)).await;
-                        }
+                    match self.receive_message().await {
+                        Ok(command) => match command {
+                            // todo get rif of unwraps
+                            Commands::GetGraphID => {}
+                            Commands::SendGraphID(graph_id) => {
+                                self.graph_id = Some(graph_id);
+                                self.sync_requester =
+                                    Some(SyncRequester::new(graph_id, &mut Rng, ServerStub))
+                            }
+                            Commands::GetSyncRequest => {}
+                            Commands::SendSyncRequest(sync_data) => {}
+                            Commands::DeserializeError => todo!(),
+                        },
+                        Err(_) => todo!(),
                     }
                 }
             }
@@ -225,5 +310,20 @@ impl<'a> TcpSyncHandler<'a> {
             Timer::after(Duration::from_millis(250)).await;
         }
         Ok(())
+    }
+}
+
+fn remove_first<T>(vec: &mut Vec<T>) -> Option<T> {
+    if vec.is_empty() {
+        return None;
+    }
+    Some(vec.remove(0))
+}
+
+fn led_control(led_bool: bool, led: &mut Output) {
+    if led_bool {
+        led.set_high();
+    } else {
+        led.set_low();
     }
 }
