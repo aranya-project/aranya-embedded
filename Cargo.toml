@@ -27,6 +27,8 @@ default = []
 [dependencies]
 anyhow = "1"
 log = "0.4"
+embedded-graphics = "0.8"
+ssd1306 = "0.9"
 esp-idf-svc = { version = "0.51", features = ["critical-section", "embassy-time-driver", "embassy-sync", "experimental"] }
 
 [build-dependencies]
