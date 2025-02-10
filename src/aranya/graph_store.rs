@@ -1,3 +1,5 @@
+use core::mem::transmute;
+
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 use alloc::vec::Vec;
@@ -8,7 +10,8 @@ use embedded_hal::delay::DelayNs;
 use embedded_hal::spi::SpiDevice;
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_sdmmc::{
-    BlockDevice, Directory, File, Mode, RawFile, SdCard, TimeSource, VolumeIdx, VolumeManager,
+    BlockDevice, Directory, File, Mode, RawDirectory, RawFile, RawVolume, SdCard, TimeSource,
+    VolumeIdx, VolumeManager,
 };
 use esp_hal::delay::Delay;
 use esp_hal::gpio::Output;
@@ -39,59 +42,91 @@ The location binary represents a vector which iterates through every command in 
 
 // Single threaded implementation therefore we only need Rc and RefCell, not Arc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
 // ! todo remove redundant Rc<>
-pub struct GraphManager<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+pub struct GraphManager<'vol_man> {
+    volume_manager: &'vol_man mut VolumeManager<
+        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+    >,
     pub graph_id: GraphId,
 }
 
-impl<'dir, SPI, DELAY, TS> GraphManager<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
+impl<'vol_man> GraphManager<'vol_man> {
     pub fn new(
-        directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+        volume_manager: &'vol_man mut VolumeManager<
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+        >,
         graph_id: GraphId,
     ) -> Self {
         println!("{}", "New SD Card Graph IO Manager".green());
         GraphManager {
-            directory,
+            volume_manager,
             graph_id,
         }
     }
 }
 
-pub struct GraphWriter<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
+pub struct GraphWriter<'vol_man> {
     /// Deserialize locations are used as usize markers for where deserialize start and end points should be on the graph data file
-    location_file: Rc<File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    location_file: Rc<
+        File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+    >,
     /// Raw binary data of the graph
-    data_file: Rc<File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    data_file: Rc<
+        File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+    >,
     /// Current head location
-    head_file: File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    head_file: File<
+        'vol_man,
+        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+        4,
+        4,
+        1,
+    >,
 }
 
-impl<'dir, SPI, DELAY, TS> GraphWriter<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
+impl<'vol_man> GraphWriter<'vol_man> {
     pub fn new(
-        location_file: File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        data_file: File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        head_file: File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-    ) -> GraphWriter<'dir, SPI, DELAY, TS> {
+        location_file: File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+        data_file: File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+        head_file: File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+    ) -> GraphWriter<'vol_man> {
         GraphWriter {
             location_file: Rc::new(location_file),
             data_file: Rc::new(data_file),
@@ -100,13 +135,8 @@ where
     }
 }
 
-impl<'dir, SPI, DELAY, TS> linear::io::Write for GraphWriter<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    type ReadOnly = GraphReader<'dir, SPI, DELAY, TS>;
+impl<'vol_man> linear::io::Write for GraphWriter<'vol_man> {
+    type ReadOnly = GraphReader<'vol_man>;
 
     fn readonly(&self) -> Self::ReadOnly {
         GraphReader {
@@ -314,22 +344,30 @@ where
     }
 }
 
-pub struct GraphReader<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    deserialize_locations_file_handle: Rc<File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
-    graph_data_file_handle: Rc<File<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+pub struct GraphReader<'vol_man> {
+    deserialize_locations_file_handle: Rc<
+        File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+    >,
+    graph_data_file_handle: Rc<
+        File<
+            'vol_man,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
+    >,
 }
 
-impl<'dir, SPI, DELAY, TS> linear::io::Read for GraphReader<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
-{
+impl<'vol_man> linear::io::Read for GraphReader<'vol_man> {
     fn fetch<T>(&self, offset: usize) -> Result<T, StorageError>
     where
         T: DeserializeOwned, // ! + Debug,
@@ -425,12 +463,7 @@ where
     }
 }
 
-impl<'dir, SPI, DELAY, TS> Clone for GraphReader<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
-{
+impl<'vol_man> Clone for GraphReader<'vol_man> {
     fn clone(&self) -> Self {
         println!("{}", "Clone".green());
         println!(
@@ -448,24 +481,33 @@ where
     }
 }
 
-impl<'dir, SPI, DELAY, TS> linear::io::IoManager for GraphManager<'dir, SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    type Writer = GraphWriter<'dir, SPI, DELAY, TS>;
+impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
+    type Writer = GraphWriter<'vol_man>;
 
     fn create(&mut self, id: GraphId) -> Result<Self::Writer, StorageError> {
         println!("{}", format!("Create GraphId: {:?}", id).green());
         println!("{}", "Create Files".green());
         // Check if file already exists by opening in ReadWriteCreate. Throw error if one does exist and create a file if it doesn't
         // Open all files using the same directory reference
+        // todo! Unsafe is going to bite later. Should be reasonably safe as lifetimes of the files are associated with volumemanager but still horribly bad practice
+        let raw_volume: RawVolume = self
+            .volume_manager
+            .open_raw_volume(VolumeIdx(0))
+            .expect("Failed to get volume");
+
+        let raw_root_directory: RawDirectory = self
+            .volume_manager
+            .open_root_dir(raw_volume)
+            .expect("Failed to open root directory");
 
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
         let data_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -474,11 +516,17 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        // Unsafe transmute to force the lifetime
+        let data_file = unsafe { transmute(data_file.to_file(self.volume_manager)) };
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
         let location_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -487,11 +535,16 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        let location_file = unsafe { transmute(location_file.to_file(self.volume_manager)) };
 
         let file_name = truncate_filename(format!("h_{}.b", id), 8);
         let head_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -500,6 +553,7 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        let head_file = unsafe { transmute(head_file.to_file(self.volume_manager)) };
 
         println!("{}", "Files Created".green());
         self.graph_id = id;
@@ -511,10 +565,24 @@ where
         println!("{}", format!("Open GraphId: {:?}", id).green());
         println!("{}", "Open Files".green());
         // Check if file exists by opening in ReadOnly mode. Return error if it doesn't
+        let raw_volume: RawVolume = self
+            .volume_manager
+            .open_raw_volume(VolumeIdx(0))
+            .expect("Failed to get volume");
+
+        let raw_root_directory: RawDirectory = self
+            .volume_manager
+            .open_root_dir(raw_volume)
+            .expect("Failed to open root directory");
+
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
         let data_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -523,11 +591,17 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        // Unsafe transmute to force the lifetime
+        let data_file = unsafe { transmute(data_file.to_file(self.volume_manager)) };
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
         let location_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -536,11 +610,16 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        let location_file = unsafe { transmute(location_file.to_file(self.volume_manager)) };
 
         let file_name = truncate_filename(format!("h_{}.b", id), 8);
         let head_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+            .volume_manager
+            .open_file_in_dir(
+                raw_root_directory,
+                file_name.as_str(),
+                Mode::ReadWriteCreate,
+            )
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -549,6 +628,7 @@ where
                 );
                 StorageError::NoSuchStorage
             })?;
+        let head_file = unsafe { transmute(head_file.to_file(self.volume_manager)) };
         println!("{}", "Files Opened".green());
         self.graph_id = id; // Update the graph_id to allow for opening different graphs
         Ok(Some(GraphWriter::new(location_file, data_file, head_file)))

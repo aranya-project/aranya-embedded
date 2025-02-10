@@ -45,29 +45,14 @@ pub struct TcpSyncHandler<'a> {
     sync_requester: Option<SyncRequester<'a, ServerStub>>,
     graph_id: Option<GraphId>,
     buffer: [u8; MAX_MESSAGE_SIZE],
-    client: Option<
-        ClientState<
-            ESP32Engine<DefaultEngine>,
-            LinearStorageProvider<
-                GraphManager<
-                    'a,
-                    ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
-                    Delay,
-                    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-                >,
-            >,
-        >,
-    >,
+    client:
+        Option<ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager<'a>>>>,
     peer_cache: PeerCache,
     effect_sink: VecSink<VmEffect>,
-    directory: Option<
-        Directory<
-            'a,
+    volume_manager: Option<
+        &'a mut VolumeManager<
             SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
             Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-            4,
-            4,
-            1,
         >,
     >,
 }
@@ -77,39 +62,13 @@ impl<'a> TcpSyncHandler<'a> {
         socket: TcpSocket<'a>,
         storage_id: Option<GraphId>,
         client: Option<
-            ClientState<
-                ESP32Engine<DefaultEngine>,
-                LinearStorageProvider<
-                    GraphManager<
-                        'a,
-                        ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
-                        Delay,
-                        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-                    >,
-                >,
-            >,
+            ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager<'a>>>,
         >,
         volume_manager: &'a mut VolumeManager<
             SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
             Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
         >,
     ) -> Self {
-        let raw_volume: RawVolume = volume_manager
-            .open_raw_volume(VolumeIdx(0))
-            .expect("Failed to get volume");
-
-        let raw_root_directory: RawDirectory = volume_manager
-            .open_root_dir(raw_volume)
-            .expect("Failed to open root directory");
-
-        let directory: Directory<
-            'a,
-            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-            4,
-            4,
-            1,
-        > = raw_root_directory.to_directory(volume_manager);
         Self {
             socket,
             graph_id: storage_id,
@@ -119,7 +78,7 @@ impl<'a> TcpSyncHandler<'a> {
             client,
             peer_cache: PeerCache::new(),
             effect_sink: VecSink::new(),
-            directory: Some(directory),
+            volume_manager: Some(volume_manager),
         }
     }
 
@@ -348,7 +307,7 @@ impl<'a> TcpSyncHandler<'a> {
                                 self.client = Some(ClientState::new(
                                     policy,
                                     LinearStorageProvider::new(GraphManager::new(
-                                        self.directory.take().unwrap(),
+                                        self.volume_manager.take().unwrap(),
                                         graph_id,
                                     )),
                                 ));
