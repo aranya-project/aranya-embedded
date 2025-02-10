@@ -40,11 +40,11 @@ where
         // Meant to be unique for every user/device
         let user_id = UserId::random(&mut Rng);
         let ffis: Vec<Box<dyn FfiCallable<DefaultEngine> + Send + 'static>> = vec![
+            Box::from(aranya_envelope_ffi::Ffi),
             Box::from(aranya_crypto_ffi::Ffi::new(store.clone())),
             Box::from(aranya_device_ffi::FfiDevice::new(user_id)),
-            Box::from(aranya_envelope_ffi::Ffi),
-            Box::from(aranya_idam_ffi::Ffi::new(store)),
             Box::from(aranya_perspective_ffi::FfiPerspective),
+            Box::from(aranya_idam_ffi::Ffi::new(store)),
         ];
         let policy = VmPolicy::new(machine, engine, ffis).expect("Could not load policy");
         ESP32Engine { policy }

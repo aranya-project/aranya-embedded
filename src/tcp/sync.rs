@@ -1,47 +1,37 @@
 use alloc::{boxed::Box, format, vec::Vec};
-use aranya_crypto::{Csprng, Rng};
+use aranya_crypto::{default::DefaultEngine, Csprng, Rng};
 use aranya_policy_vm::Value;
 use aranya_runtime::{
-    CommandMeta, GraphId, PeerCache, StorageProvider, SyncError, SyncRequester, VmEffect,
+    linear::LinearStorageProvider, ClientState, CommandMeta, GraphId, PeerCache, StorageProvider,
+    SyncError, SyncRequester, VmEffect,
 };
 use core::{cell::UnsafeCell, fmt, marker::PhantomData};
 use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Timer};
+use embedded_hal::{delay::DelayNs, spi::SpiDevice};
+use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_io::{ReadReady, WriteReady};
 use embedded_io_async::{Read, Write};
-use esp_hal::gpio::Output;
+use embedded_sdmmc::{
+    Directory, RawDirectory, RawVolume, SdCard, TimeSource, VolumeIdx, VolumeManager,
+};
+use esp_hal::{
+    delay::Delay, gpio::Output, peripheral::Peripheral, peripherals::TIMG1, spi::master::Spi,
+    timer::timg::TimerX,
+};
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_slice};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{aranya::sink::VecSink, Client};
+use crate::{
+    aranya::{graph_store::GraphManager, sink::VecSink},
+    hardware::{esp32_engine::ESP32Engine, esp32_time::Esp32TimeSource},
+};
 
 use super::format::Commands;
 
-static mut LED: UnsafeCell<Option<Output<'static>>> = UnsafeCell::new(None);
-
-#[derive(Debug, Serialize, Deserialize)]
-pub enum Message {
-    SyncRequest {
-        session_id: u128,
-        storage_id: u64,
-        max_bytes: u64,
-        commands: Vec<Vec<u8>>,
-    },
-    SyncResponse {
-        session_id: u128,
-        index: u64,
-        commands: Vec<CommandMeta>,
-    },
-    SyncEnd {
-        session_id: u128,
-        max_index: u64,
-    },
-    EndSession {
-        session_id: u128,
-    },
-}
+//static mut LED: UnsafeCell<Option<Output<'static>>> = UnsafeCell::new(None);
 
 const MAX_MESSAGE_SIZE: usize = 1024; // Match the TCP buffer size
 const MAX_RETRY_TIME_MS: u64 = 1000; // Maximum retry time of 1 second
@@ -55,19 +45,69 @@ pub struct TcpSyncHandler<'a> {
     sync_requester: Option<SyncRequester<'a, ServerStub>>,
     graph_id: Option<GraphId>,
     buffer: [u8; MAX_MESSAGE_SIZE],
-    client: Client,
+    client: Option<
+        ClientState<
+            ESP32Engine<DefaultEngine>,
+            LinearStorageProvider<
+                GraphManager<
+                    'a,
+                    ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
+                    Delay,
+                    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+                >,
+            >,
+        >,
+    >,
     peer_cache: PeerCache,
     effect_sink: VecSink<VmEffect>,
+    directory: Directory<
+        'a,
+        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+        4,
+        4,
+        1,
+    >,
 }
 
 impl<'a> TcpSyncHandler<'a> {
     pub fn new(
         socket: TcpSocket<'a>,
         storage_id: Option<GraphId>,
-        client: Client,
-        peer_cache: PeerCache,
-        effect_sink: VecSink<VmEffect>,
+        client: Option<
+            ClientState<
+                ESP32Engine<DefaultEngine>,
+                LinearStorageProvider<
+                    GraphManager<
+                        'a,
+                        ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
+                        Delay,
+                        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+                    >,
+                >,
+            >,
+        >,
+        volume_manager: &'a mut VolumeManager<
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+        >,
     ) -> Self {
+        let raw_volume: RawVolume = volume_manager
+            .open_raw_volume(VolumeIdx(0))
+            .expect("Failed to get volume");
+
+        let raw_root_directory: RawDirectory = volume_manager
+            .open_root_dir(raw_volume)
+            .expect("Failed to open root directory");
+
+        let directory: Directory<
+            'a,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        > = raw_root_directory.to_directory(volume_manager);
         Self {
             socket,
             graph_id: storage_id,
@@ -75,8 +115,9 @@ impl<'a> TcpSyncHandler<'a> {
                 .map(|storage_id| SyncRequester::new(storage_id, &mut Rng, ServerStub)),
             buffer: [0u8; MAX_MESSAGE_SIZE],
             client,
-            peer_cache,
-            effect_sink,
+            peer_cache: PeerCache::new(),
+            effect_sink: VecSink::new(),
+            directory,
         }
     }
 
@@ -152,7 +193,7 @@ impl<'a> TcpSyncHandler<'a> {
                         // Poll the requester for a message
                         match self.sync_requester.as_mut().unwrap().poll(
                             &mut self.buffer,
-                            self.client.provider(),
+                            self.client.as_mut().unwrap().provider(),
                             &mut self.peer_cache,
                         ) {
                             Ok((written, _)) => {
@@ -181,7 +222,7 @@ impl<'a> TcpSyncHandler<'a> {
                                     // Poll the requester for a message
                                     match self.sync_requester.as_mut().unwrap().poll(
                                         &mut self.buffer,
-                                        self.client.provider(),
+                                        self.client.as_mut().unwrap().provider(),
                                         &mut self.peer_cache,
                                     ) {
                                         Ok((written, _)) => {
@@ -201,9 +242,12 @@ impl<'a> TcpSyncHandler<'a> {
                                     Some(sync_commands) => {
                                         println!("Recieved Commands: {:?}", sync_commands);
                                         if !sync_commands.is_empty() {
-                                            let mut trx =
-                                                self.client.transaction(self.graph_id.unwrap());
+                                            let mut trx = self
+                                                .client
+                                                .unwrap()
+                                                .transaction(self.graph_id.unwrap());
                                             self.client
+                                                .unwrap()
                                                 .add_commands(
                                                     &mut trx,
                                                     &mut self.effect_sink,
@@ -212,6 +256,7 @@ impl<'a> TcpSyncHandler<'a> {
                                                 )
                                                 .expect("Unable to add recieved commands");
                                             self.client
+                                                .unwrap()
                                                 .commit(&mut trx, &mut self.effect_sink)
                                                 .expect("commit failed");
                                             println!("committed");
@@ -232,10 +277,10 @@ impl<'a> TcpSyncHandler<'a> {
                                                     );
                                                     match kv_pair.value() {
                                                         Value::Bool(state) => {
-                                                            match unsafe { &mut *LED.get() } {
+                                                            /*match unsafe { &mut *LED.get() } {
                                                                 Some(led) => led_control(*state, led),
                                                                 None => println!("LED peripheral not initialized"),
-                                                            };
+                                                            };*/
                                                         }
                                                         _ => {
                                                             println!(
@@ -289,20 +334,29 @@ impl<'a> TcpSyncHandler<'a> {
 
                 // try to read GraphId
                 {
-                    match self.receive_message().await {
-                        Ok(command) => match command {
+                    if let Ok(command) = self.receive_message().await {
+                        match command {
                             // todo get rif of unwraps
                             Commands::GetGraphID => {}
                             Commands::SendGraphID(graph_id) => {
                                 self.graph_id = Some(graph_id);
                                 self.sync_requester =
-                                    Some(SyncRequester::new(graph_id, &mut Rng, ServerStub))
+                                    Some(SyncRequester::new(graph_id, &mut Rng, ServerStub));
+                                // todo collect correct graphID
+
+                                let policy = ESP32Engine::<DefaultEngine>::new();
+                                self.client = Some(ClientState::new(
+                                    policy,
+                                    LinearStorageProvider::new(GraphManager::new(
+                                        &self.directory,
+                                        graph_id,
+                                    )),
+                                ));
                             }
                             Commands::GetSyncRequest => {}
                             Commands::SendSyncRequest(sync_data) => {}
                             Commands::DeserializeError => todo!(),
-                        },
-                        Err(_) => todo!(),
+                        }
                     }
                 }
             }
@@ -320,10 +374,10 @@ fn remove_first<T>(vec: &mut Vec<T>) -> Option<T> {
     Some(vec.remove(0))
 }
 
-fn led_control(led_bool: bool, led: &mut Output) {
+/*fn led_control(led_bool: bool, led: &mut Output) {
     if led_bool {
         led.set_high();
     } else {
         led.set_low();
     }
-}
+}*/

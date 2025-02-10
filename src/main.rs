@@ -54,6 +54,7 @@ pub type Client = ClientState<
     ESP32Engine<DefaultEngine>,
     LinearStorageProvider<
         GraphManager<
+            '_,
             ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
             Delay,
             Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
@@ -121,8 +122,8 @@ async fn main(spawner: Spawner) {
     let sclk = peripherals.GPIO14;
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
-    let cs = Output::new(peripherals.GPIO13, Level::High);
-    let spi = Spi::new_with_config(
+    let cs: Output<'static> = Output::new(peripherals.GPIO13, Level::High) as Output<'static>;
+    let spi: Spi<'static, esp_hal::Blocking> = Spi::new_with_config(
         peripherals.SPI2,
         Config {
             frequency: 100u32.kHz(),
@@ -130,15 +131,18 @@ async fn main(spawner: Spawner) {
             ..Default::default()
         },
     );
-    let spi = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
+    let spi: Spi<'static, esp_hal::Blocking> = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
 
     // SD Card Initialization
     println!("SD Card intialization");
     let delay = Delay::new();
-    let ex_device =
+    let ex_device: ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay> =
         ExclusiveDevice::new(spi, cs, delay).expect("Failed to set Exclusive SPI device");
     // ExclusiveDevice implements SpiDevice traits needed for SdCard
-    let sd_card = SdCard::new(ex_device, delay);
+    let sd_card: SdCard<
+        ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
+        Delay,
+    > = SdCard::new(ex_device, delay);
     println!(
         "{}",
         format!("Card Type is {:?}", sd_card.get_card_type()).blue()
@@ -149,44 +153,19 @@ async fn main(spawner: Spawner) {
             "{}",
             format!("Card Type is {:?}", sd_card.get_card_type()).blue()
         );
+        Timer::after(Duration::from_millis(100)).await;
     }
 
-    let volume_manager = mk_static!(
+    let volume_manager: &mut VolumeManager<
+        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+    > = mk_static!(
         VolumeManager<
-            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
             Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
         >,
         VolumeManager::new(sd_card, esp_timer_source)
     );
-    let raw_volume: RawVolume = volume_manager
-        .open_raw_volume(VolumeIdx(0))
-        .expect("Failed to get volume");
-
-    let raw_root_directory: RawDirectory = volume_manager
-        .open_root_dir(raw_volume)
-        .expect("Failed to open root directory");
-
-    let root_directory = mk_static!(
-        Directory<
-            '_,
-            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-            4,
-            4,
-            1,
-        >,
-        raw_root_directory.to_directory(volume_manager)
-    );
-
-    // todo collect correct graphID
-    let manager = GraphManager::new(root_directory, GraphId::random(&mut Rng));
-
-    let policy = ESP32Engine::<DefaultEngine>::new();
-    let client = ClientState::new(policy, LinearStorageProvider::new(manager));
-
-    // Aranya Graph, Manager, and State Initialization
-    // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
-    // Create New Graph With the Specified Effect Sink
 
     // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;
@@ -225,10 +204,6 @@ async fn main(spawner: Spawner) {
     // Running DHCP for internal IP setting
     spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
 
-    // TCP receive and transmit buffer sizes. 1KB for each
-    let mut rx_buffer = [0; 1024];
-    let mut tx_buffer = [0; 1024];
-
     loop {
         if stack.is_link_up() {
             break;
@@ -243,8 +218,6 @@ async fn main(spawner: Spawner) {
         .config_v4()
         .inspect(|c| println!("ipv4 config: {c:?}"));
 
-    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-    let peer_cache = PeerCache::new();
     //let effect_sink = VecSink::new();
 
     println!("TCP server starting on port 8080");
@@ -252,6 +225,11 @@ async fn main(spawner: Spawner) {
     println!("Waiting for connection...");
 
     let _buf = [0u8; 1024];
+    //loop {
+    // TCP receive and transmit buffer sizes. 1KB for each
+    let mut rx_buffer = [0; 1024];
+    let mut tx_buffer = [0; 1024];
+    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 
     match socket
         .accept(IpListenEndpoint {
@@ -262,25 +240,25 @@ async fn main(spawner: Spawner) {
     {
         Ok(_) => {
             println!("Client connected");
-            /*
-            let mut sync_handler =
-                TcpSyncHandler::new(socket, None, client, peer_cache, effect_sink);
+
+            // Aranya Graph, Manager, and State Initialization
+            // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
+            // Create New Graph With the Specified Effect Sink
+
+            let mut sync_handler = TcpSyncHandler::new(socket, None, None, volume_manager);
             sync_handler
                 .handle_connection()
                 .await
                 .expect("Failed to handle connection");
-            */
         }
         Err(e) => {
             // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets
             println!("Accept error: {:?}", e);
             // Close the current socket connection
-            socket.close();
-            // Reset the socket by creating a new one
+            socket.abort();
             drop(socket);
-            socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-            // Add a small delay before retrying
             Timer::after(Duration::from_millis(100)).await;
         }
     }
+    //}
 }
