@@ -50,18 +50,6 @@ use tcp::sync::TcpSyncHandler;
 
 // ! Panics will result in lockout if early enough so try to convert to using results that don't panic
 
-pub type Client = ClientState<
-    ESP32Engine<DefaultEngine>,
-    LinearStorageProvider<
-        GraphManager<
-            '_,
-            ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
-            Delay,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
-    >,
->;
-
 // When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
 macro_rules! mk_static {
     ($t:ty,$val:expr) => {{

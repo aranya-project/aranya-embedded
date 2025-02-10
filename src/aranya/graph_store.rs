@@ -6,14 +6,23 @@ use aranya_crypto::default;
 use aranya_runtime::{linear, GraphId, Location, StorageError};
 use embedded_hal::delay::DelayNs;
 use embedded_hal::spi::SpiDevice;
+use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_sdmmc::{
     BlockDevice, Directory, File, Mode, RawFile, SdCard, TimeSource, VolumeIdx, VolumeManager,
 };
+use esp_hal::delay::Delay;
+use esp_hal::gpio::Output;
+use esp_hal::peripheral::Peripheral;
+use esp_hal::peripherals::TIMG1;
+use esp_hal::spi::master::Spi;
+use esp_hal::timer::timg::TimerX;
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+
+use crate::hardware::esp32_time::Esp32TimeSource;
 
 /*
 Details of Implementation
@@ -36,18 +45,18 @@ where
     DELAY: DelayNs + 'static,
     TS: TimeSource + 'static,
 {
-    directory: &'dir Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
     pub graph_id: GraphId,
 }
 
-impl<'a, SPI, DELAY, TS> GraphManager<'a, SPI, DELAY, TS>
+impl<'dir, SPI, DELAY, TS> GraphManager<'dir, SPI, DELAY, TS>
 where
     SPI: SpiDevice + 'static,
     DELAY: DelayNs + 'static,
     TS: TimeSource + 'static,
 {
     pub fn new(
-        directory: &'a Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+        directory: Directory<'dir, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
         graph_id: GraphId,
     ) -> Self {
         println!("{}", "New SD Card Graph IO Manager".green());
@@ -441,9 +450,9 @@ where
 
 impl<'dir, SPI, DELAY, TS> linear::io::IoManager for GraphManager<'dir, SPI, DELAY, TS>
 where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
+    SPI: SpiDevice + 'static,
+    DELAY: DelayNs + 'static,
+    TS: TimeSource + 'static,
 {
     type Writer = GraphWriter<'dir, SPI, DELAY, TS>;
 

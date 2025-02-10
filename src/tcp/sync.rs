@@ -60,13 +60,15 @@ pub struct TcpSyncHandler<'a> {
     >,
     peer_cache: PeerCache,
     effect_sink: VecSink<VmEffect>,
-    directory: Directory<
-        'a,
-        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        4,
-        4,
-        1,
+    directory: Option<
+        Directory<
+            'a,
+            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+            4,
+            4,
+            1,
+        >,
     >,
 }
 
@@ -117,7 +119,7 @@ impl<'a> TcpSyncHandler<'a> {
             client,
             peer_cache: PeerCache::new(),
             effect_sink: VecSink::new(),
-            directory,
+            directory: Some(directory),
         }
     }
 
@@ -242,12 +244,10 @@ impl<'a> TcpSyncHandler<'a> {
                                     Some(sync_commands) => {
                                         println!("Recieved Commands: {:?}", sync_commands);
                                         if !sync_commands.is_empty() {
-                                            let mut trx = self
-                                                .client
-                                                .unwrap()
-                                                .transaction(self.graph_id.unwrap());
-                                            self.client
-                                                .unwrap()
+                                            let client = self.client.as_mut().unwrap();
+                                            let mut trx =
+                                                client.transaction(self.graph_id.unwrap());
+                                            client
                                                 .add_commands(
                                                     &mut trx,
                                                     &mut self.effect_sink,
@@ -255,8 +255,7 @@ impl<'a> TcpSyncHandler<'a> {
                                                     &mut self.peer_cache,
                                                 )
                                                 .expect("Unable to add recieved commands");
-                                            self.client
-                                                .unwrap()
+                                            client
                                                 .commit(&mut trx, &mut self.effect_sink)
                                                 .expect("commit failed");
                                             println!("committed");
@@ -345,10 +344,11 @@ impl<'a> TcpSyncHandler<'a> {
                                 // todo collect correct graphID
 
                                 let policy = ESP32Engine::<DefaultEngine>::new();
+
                                 self.client = Some(ClientState::new(
                                     policy,
                                     LinearStorageProvider::new(GraphManager::new(
-                                        &self.directory,
+                                        self.directory.take().unwrap(),
                                         graph_id,
                                     )),
                                 ));
