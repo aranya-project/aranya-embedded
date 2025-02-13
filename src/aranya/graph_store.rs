@@ -506,7 +506,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
@@ -525,7 +525,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
@@ -543,7 +543,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
@@ -581,7 +581,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
@@ -600,7 +600,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
@@ -618,7 +618,7 @@ impl<'vol_man> linear::io::IoManager for GraphManager<'vol_man> {
             .open_file_in_dir(
                 raw_root_directory,
                 file_name.as_str(),
-                Mode::ReadWriteCreate,
+                Mode::ReadWriteCreateOrTruncate,
             )
             .map_err(|e| {
                 println!(
