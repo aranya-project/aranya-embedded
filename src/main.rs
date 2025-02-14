@@ -12,13 +12,8 @@ mod tasks;
 mod tcp;
 
 use alloc::format;
+use alloc::rc::Rc;
 use alloc::sync::Arc;
-use aranya::graph_store::GraphManager;
-use aranya::sink::VecSink;
-use aranya_crypto::default::DefaultEngine;
-use aranya_crypto::Rng;
-use aranya_runtime::linear::LinearStorageProvider;
-use aranya_runtime::{ClientState, GraphId, PeerCache};
 use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
@@ -26,9 +21,7 @@ use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
 use embassy_net::{Ipv4Cidr, StaticConfigV4};
 use embassy_time::{Duration, Timer};
 use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_sdmmc::{
-    Directory, RawDirectory, RawVolume, SdCard, Timestamp, VolumeIdx, VolumeManager,
-};
+use embedded_sdmmc::{SdCard, Timestamp, VolumeManager};
 use esp_backtrace as _;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
@@ -41,7 +34,6 @@ use esp_hal::{prelude::*, timer::timg::TimerGroup};
 use esp_println::println;
 use esp_wifi::wifi::{WifiApDevice, WifiDevice};
 use esp_wifi::EspWifiController;
-use hardware::esp32_engine::ESP32Engine;
 use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
@@ -153,7 +145,7 @@ async fn main(spawner: Spawner) {
         Timer::after(Duration::from_millis(100)).await;
     }
 
-    let volume_manager = Arc::new(VolumeManager::new(sd_card, esp_timer_source));
+    let volume_manager = Rc::new(VolumeManager::new(sd_card, esp_timer_source));
 
     // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;
@@ -184,11 +176,15 @@ async fn main(spawner: Spawner) {
         )
     );
 
+    // Running the network stack for handling communication events
+    spawner.spawn(net_task(stack)).ok();
+
+    // Wait a bit for net_task to initialize
+    Timer::after(Duration::from_millis(100)).await;
+
     // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
     // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
-    // Running the network stack for handling communication events
-    spawner.spawn(net_task(stack)).ok();
     // Running DHCP for internal IP setting
     spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
 

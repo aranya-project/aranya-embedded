@@ -1,20 +1,16 @@
-use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
+use alloc::{format, rc::Rc, vec::Vec};
 use aranya_crypto::{default::DefaultEngine, Csprng, Rng};
 use aranya_policy_vm::Value;
 use aranya_runtime::{
-    linear::LinearStorageProvider, ClientState, CommandMeta, GraphId, PeerCache, StorageProvider,
-    SyncError, SyncRequester, VmEffect,
+    linear::LinearStorageProvider, ClientState, GraphId, PeerCache, SyncError, SyncRequester,
+    VmEffect,
 };
-use core::{cell::UnsafeCell, fmt, marker::PhantomData};
 use embassy_net::tcp::TcpSocket;
 use embassy_time::{Duration, Timer};
-use embedded_hal::{delay::DelayNs, spi::SpiDevice};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_io::{ReadReady, WriteReady};
 use embedded_io_async::{Read, Write};
-use embedded_sdmmc::{
-    Directory, RawDirectory, RawVolume, SdCard, TimeSource, VolumeIdx, VolumeManager,
-};
+use embedded_sdmmc::{SdCard, VolumeManager};
 use esp_hal::{
     delay::Delay, gpio::Output, peripheral::Peripheral, peripherals::TIMG1, spi::master::Spi,
     timer::timg::TimerX,
@@ -22,7 +18,7 @@ use esp_hal::{
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_slice};
-use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::{
     aranya::{graph_store::GraphManager, linear_store::imp::FileManager, sink::VecSink},
@@ -54,7 +50,7 @@ pub struct TcpSyncHandler<'a> {
     client: Option<ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager>>>,
     peer_cache: PeerCache,
     effect_sink: VecSink<VmEffect>,
-    volume_manager: Arc<VolumeMan>,
+    volume_manager: Rc<VolumeMan>,
 }
 
 impl<'a> TcpSyncHandler<'a> {
@@ -64,7 +60,7 @@ impl<'a> TcpSyncHandler<'a> {
         client: Option<
             ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager>>,
         >,
-        volume_manager: Arc<VolumeMan>,
+        volume_manager: Rc<VolumeMan>,
     ) -> Self {
         Self {
             socket,
@@ -149,11 +145,13 @@ impl<'a> TcpSyncHandler<'a> {
                 loop {
                     println!("Start of Post Sync Request Handle loop");
                     // Check if requester has a message to send
-                    if self.sync_requester.as_ref().unwrap().ready() {
+                    if let (Some(requester), Some(client)) =
+                        (self.sync_requester.as_mut(), self.client.as_mut())
+                    {
                         // Poll the requester for a message
-                        match self.sync_requester.as_mut().unwrap().poll(
+                        match requester.poll(
                             &mut self.buffer,
-                            self.client.as_mut().unwrap().provider(),
+                            client.provider(),
                             &mut self.peer_cache,
                         ) {
                             Ok((written, _)) => {

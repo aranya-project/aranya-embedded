@@ -1,15 +1,10 @@
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
-use alloc::sync::Arc;
+
 use alloc::vec::Vec;
 use alloc::{format, vec};
-use aranya_crypto::default;
 use aranya_runtime::{linear, GraphId, Location, StorageError};
-use embedded_hal::delay::DelayNs;
-use embedded_hal::spi::SpiDevice;
-use embedded_sdmmc::{
-    BlockDevice, Directory, File, Mode, RawFile, SdCard, TimeSource, VolumeIdx, VolumeManager,
-};
+use embedded_sdmmc::{Mode, RawFile, VolumeIdx};
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_allocvec};
@@ -31,26 +26,26 @@ The head binary is the head location
 The location binary represents a vector which iterates through every command in data with the corresponding location for the bytes offset of each command, so that we know the boundaries for deserialization
 */
 
-// Single threaded implementation therefore we only need Rc and RefCell, not Arc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
-// ! todo remove redundant Arc<>
+// Single threaded implementation therefore we only need Rc and RefCell, not Rc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
+// ! todo remove redundant Rc<>
 
 pub struct GraphManager {
-    vol: Arc<VolumeMan>,
+    vol: Rc<VolumeMan>,
 }
 
 impl GraphManager {
     /// Creates a `FileManager` at `dir`.
-    pub fn new(volume_mgr: Arc<VolumeMan>) -> Result<Self, StorageError> {
+    pub fn new(volume_mgr: Rc<VolumeMan>) -> Result<Self, StorageError> {
         Ok(Self { vol: volume_mgr })
     }
 }
 
 pub struct GraphWriter {
-    vol: Arc<VolumeMan>,
+    vol: Rc<VolumeMan>,
     /// Deserialize locations are used as usize markers for where deserialize start and end points should be on the graph data file
-    location_file: Arc<RawFile>,
+    location_file: Rc<RawFile>,
     /// Raw binary data of the graph
-    data_file: Arc<RawFile>,
+    data_file: Rc<RawFile>,
     /// Current head location
     head_file: RawFile,
 }
@@ -58,9 +53,9 @@ pub struct GraphWriter {
 impl GraphWriter {
     /// Creates a `FileManager` at `dir`.
     pub fn new(
-        volume_mgr: Arc<VolumeMan>,
-        location_file: Arc<RawFile>,
-        data_file: Arc<RawFile>,
+        volume_mgr: Rc<VolumeMan>,
+        location_file: Rc<RawFile>,
+        data_file: Rc<RawFile>,
         head_file: RawFile,
     ) -> Self {
         Self {
@@ -87,7 +82,11 @@ impl linear::io::Write for GraphWriter {
         println!("{}", "Head Access".green());
 
         let mut serialize_vec: Vec<u8> = Vec::new();
-        while !self.vol.file_eof(self.head_file).unwrap() {
+        while !self
+            .vol
+            .file_eof(self.head_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self.vol.read(self.head_file, &mut buffer).map_err(|e| {
                 println!(
@@ -125,7 +124,10 @@ impl linear::io::Write for GraphWriter {
         T: Serialize,
     {
         println!("{}", "Append Data".green());
-        let data_file_length = self.vol.file_length(*self.data_file).unwrap();
+        let data_file_length = self
+            .vol
+            .file_length(*self.data_file)
+            .map_err(|_| StorageError::IoError)?;
         println!(
             "{}",
             format!("Bytes of Data Binary: {}", data_file_length).blue()
@@ -153,7 +155,11 @@ impl linear::io::Write for GraphWriter {
         println!("{}", "Location Management".green());
 
         let mut serialized_location = Vec::new();
-        while !self.vol.file_eof(*self.location_file).unwrap() {
+        while !self
+            .vol
+            .file_eof(*self.location_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
                 .vol
@@ -228,7 +234,11 @@ impl linear::io::Write for GraphWriter {
         println!("{}", format!("Commit Head Details: {}", head).blue());
         println!("{}", "Head Management".green());
         let mut serialized = Vec::new();
-        while !self.vol.file_eof(self.head_file).unwrap() {
+        while !self
+            .vol
+            .file_eof(self.head_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
                 .vol
@@ -290,9 +300,9 @@ impl linear::io::Write for GraphWriter {
 
 #[derive(Clone)]
 pub struct GraphReader {
-    vol: Arc<VolumeMan>,
-    deserialize_locations_file_handle: Arc<RawFile>,
-    graph_data_file_handle: Arc<RawFile>,
+    vol: Rc<VolumeMan>,
+    deserialize_locations_file_handle: Rc<RawFile>,
+    graph_data_file_handle: Rc<RawFile>,
 }
 
 impl linear::io::Read for GraphReader {
@@ -306,7 +316,7 @@ impl linear::io::Read for GraphReader {
         while !self
             .vol
             .file_eof(*self.deserialize_locations_file_handle)
-            .unwrap()
+            .map_err(|_| StorageError::IoError)?
         {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
@@ -403,11 +413,17 @@ impl linear::io::IoManager for GraphManager {
         println!("{}", "Create Files".green());
         // Check if file already exists by opening in ReadWriteCreate. Throw error if one does exist and create a file if it doesn't
         // Open all files using the same directory reference
-        let raw_vol = self.vol.open_raw_volume(VolumeIdx(0)).unwrap();
-        let raw_dir = self.vol.open_root_dir(raw_vol).unwrap();
+        let raw_vol = self
+            .vol
+            .open_raw_volume(VolumeIdx(0))
+            .map_err(|_| StorageError::IoError)?;
+        let raw_dir = self
+            .vol
+            .open_root_dir(raw_vol)
+            .map_err(|_| StorageError::IoError)?;
 
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
-        let data_file: Arc<RawFile> = Arc::new(
+        let data_file: Rc<RawFile> = Rc::new(
             self.vol
                 .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteCreateOrTruncate)
                 .map_err(|e| {
@@ -421,7 +437,7 @@ impl linear::io::IoManager for GraphManager {
         );
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
-        let location_file: Arc<RawFile> = Arc::new(
+        let location_file: Rc<RawFile> = Rc::new(
             self.vol
                 .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteCreateOrTruncate)
                 .map_err(|e| {
@@ -461,11 +477,17 @@ impl linear::io::IoManager for GraphManager {
         println!("{}", format!("Open GraphId: {:?}", id).green());
         println!("{}", "Open Files".green());
         // Check if file exists by opening in ReadOnly mode. Return error if it doesn't
-        let raw_vol = self.vol.open_raw_volume(VolumeIdx(0)).unwrap();
-        let raw_dir = self.vol.open_root_dir(raw_vol).unwrap();
+        let raw_vol = self
+            .vol
+            .open_raw_volume(VolumeIdx(0))
+            .map_err(|_| StorageError::IoError)?;
+        let raw_dir = self
+            .vol
+            .open_root_dir(raw_vol)
+            .map_err(|_| StorageError::IoError)?;
 
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
-        let data_file: Arc<RawFile> = Arc::new(
+        let data_file: Rc<RawFile> = Rc::new(
             self.vol
                 .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteTruncate)
                 .map_err(|e| {
@@ -479,7 +501,7 @@ impl linear::io::IoManager for GraphManager {
         );
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
-        let location_file: Arc<RawFile> = Arc::new(
+        let location_file: Rc<RawFile> = Rc::new(
             self.vol
                 .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteTruncate)
                 .map_err(|e| {

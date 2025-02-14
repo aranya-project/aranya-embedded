@@ -4,7 +4,6 @@ use aranya_crypto::keystore::memstore::MemStore;
 use aranya_crypto::{default::DefaultEngine, UserId};
 use aranya_crypto::{Engine, Rng};
 use aranya_policy_vm::{Machine, Module};
-use aranya_runtime::memory::MemStorageProvider;
 use aranya_runtime::{EngineError, PolicyId, VmEffect};
 use aranya_runtime::{FfiCallable, VmPolicy};
 use rkyv::rancor::Error;
