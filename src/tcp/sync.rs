@@ -80,6 +80,7 @@ impl<'a> TcpSyncHandler<'a> {
     }
 
     async fn send_message(&mut self, command: Commands) -> Result<(), SyncError> {
+        println!("Send Message over TCP");
         // Check if socket is ready to write
         if !self.socket.write_ready().map_err(|_| SyncError::NotReady)? {
             return Err(SyncError::NotReady);
@@ -146,6 +147,7 @@ impl<'a> TcpSyncHandler<'a> {
             if self.sync_requester.is_some() {
                 println!("Sync Requester Exists");
                 loop {
+                    println!("Start of Post Sync Request Handle loop");
                     // Check if requester has a message to send
                     if self.sync_requester.as_ref().unwrap().ready() {
                         // Poll the requester for a message
@@ -168,77 +170,89 @@ impl<'a> TcpSyncHandler<'a> {
 
                     // Read message
                     match self.receive_message().await {
-                        Ok(command) => match command {
-                            // todo get rif of unwraps
-                            Commands::GetGraphID => {
-                                self.send_message(Commands::SendGraphID(self.graph_id.unwrap()))
-                                    .await?
-                            }
-                            Commands::SendGraphID(graph_id) => {}
-                            Commands::GetSyncRequest => {
-                                if self.sync_requester.as_ref().unwrap().ready() {
-                                    // Poll the requester for a message
-                                    match self.sync_requester.as_mut().unwrap().poll(
-                                        &mut self.buffer,
-                                        self.client.as_mut().unwrap().provider(),
-                                        &mut self.peer_cache,
-                                    ) {
-                                        Ok((written, _)) => {
-                                            let sync_data = Vec::from(&self.buffer[..written]);
-                                            let command = Commands::SendSyncRequest(sync_data);
-                                            self.send_message(command).await?;
-                                        }
-                                        Err(e) => {
-                                            println!("Error polling requester: {:?}", e);
-                                            return Err(e);
+                        Ok(command) => {
+                            println!("Received Message from TCP");
+                            match command {
+                                // todo get rif of unwraps
+                                Commands::GetGraphID => {
+                                    println!("Received GetGraphID");
+                                    self.send_message(Commands::SendGraphID(self.graph_id.unwrap()))
+                                        .await?
+                                }
+                                Commands::SendGraphID(graph_id) => {
+                                    println!("Received SendGraphID");
+                                }
+                                Commands::GetSyncRequest => {
+                                    println!("Received GetSyncRequest");
+                                    if self.sync_requester.as_ref().unwrap().ready() {
+                                        // Poll the requester for a message
+                                        match self.sync_requester.as_mut().unwrap().poll(
+                                            &mut self.buffer,
+                                            self.client.as_mut().unwrap().provider(),
+                                            &mut self.peer_cache,
+                                        ) {
+                                            Ok((written, _)) => {
+                                                let sync_data = Vec::from(&self.buffer[..written]);
+                                                let command = Commands::SendSyncRequest(sync_data);
+                                                self.send_message(command).await?;
+                                            }
+                                            Err(e) => {
+                                                println!("Error polling requester: {:?}", e);
+                                                return Err(e);
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            Commands::SendSyncRequest(sync_data) => {
-                                match self.sync_requester.as_mut().unwrap().receive(&sync_data)? {
-                                    Some(sync_commands) => {
-                                        println!("Recieved Commands: {:?}", sync_commands);
-                                        if !sync_commands.is_empty() {
-                                            let client = self.client.as_mut().unwrap();
-                                            let mut trx =
-                                                client.transaction(self.graph_id.unwrap());
-                                            client
-                                                .add_commands(
-                                                    &mut trx,
-                                                    &mut self.effect_sink,
-                                                    &sync_commands,
-                                                    &mut self.peer_cache,
-                                                )
-                                                .expect("Unable to add recieved commands");
-                                            client
-                                                .commit(&mut trx, &mut self.effect_sink)
-                                                .expect("commit failed");
-                                            println!("committed");
-                                            println!("{:?}", self.effect_sink)
-                                        }
-                                        if let Some(last_effect) =
-                                            remove_first(&mut self.effect_sink.effects)
-                                        {
-                                            if last_effect.name == "LEDBool" {
-                                                if let Some(kv_pair) = last_effect
-                                                    .fields
-                                                    .iter()
-                                                    .find(|kv| kv.key() == "on")
-                                                {
-                                                    println!(
-                                                        "{}",
-                                                        "Action Call based on bool".green()
-                                                    );
-                                                    match kv_pair.value() {
-                                                        Value::Bool(state) => {
-                                                            /*match unsafe { &mut *LED.get() } {
-                                                                Some(led) => led_control(*state, led),
-                                                                None => println!("LED peripheral not initialized"),
-                                                            };*/
-                                                        }
-                                                        _ => {
-                                                            println!(
+                                Commands::SendSyncRequest(sync_data) => {
+                                    println!("Recieved SendSyncRequest");
+                                    match self
+                                        .sync_requester
+                                        .as_mut()
+                                        .unwrap()
+                                        .receive(&sync_data)?
+                                    {
+                                        Some(sync_commands) => {
+                                            println!("Recieved Commands: {:?}", sync_commands);
+                                            if !sync_commands.is_empty() {
+                                                let client = self.client.as_mut().unwrap();
+                                                let mut trx =
+                                                    client.transaction(self.graph_id.unwrap());
+                                                client
+                                                    .add_commands(
+                                                        &mut trx,
+                                                        &mut self.effect_sink,
+                                                        &sync_commands,
+                                                        &mut self.peer_cache,
+                                                    )
+                                                    .expect("Unable to add recieved commands");
+                                                client
+                                                    .commit(&mut trx, &mut self.effect_sink)
+                                                    .expect("commit failed");
+                                                println!("committed");
+                                                println!("{:?}", self.effect_sink)
+                                            }
+                                            if let Some(last_effect) =
+                                                remove_first(&mut self.effect_sink.effects)
+                                            {
+                                                if last_effect.name == "LEDBool" {
+                                                    if let Some(kv_pair) = last_effect
+                                                        .fields
+                                                        .iter()
+                                                        .find(|kv| kv.key() == "on")
+                                                    {
+                                                        println!(
+                                                            "{}",
+                                                            "Action Call based on bool".green()
+                                                        );
+                                                        match kv_pair.value() {
+                                                            Value::Bool(state) => {
+                                                                /*match unsafe { &mut *LED.get() } {
+                                                                    Some(led) => led_control(*state, led),
+                                                                    None => println!("LED peripheral not initialized"),
+                                                                };*/
+                                                            }
+                                                            _ => {
+                                                                println!(
                                                                 "{}",
                                                                 format!(
                                                                     "Unexpected Value type for LED State: {:?}",
@@ -246,38 +260,43 @@ impl<'a> TcpSyncHandler<'a> {
                                                                 )
                                                                 .yellow()
                                                             );
+                                                            }
                                                         }
-                                                    }
-                                                } else {
-                                                    println!(
+                                                    } else {
+                                                        println!(
                                                         "{}",
                                                         "'on' Field not Found in LEDBool Effect"
                                                             .yellow()
                                                     );
+                                                    }
+                                                } else {
+                                                    println!(
+                                                        "{}",
+                                                        format!(
+                                                            "Unexpected Effect: {:?}",
+                                                            last_effect.name
+                                                        )
+                                                        .yellow()
+                                                    );
                                                 }
                                             } else {
-                                                println!(
-                                                    "{}",
-                                                    format!(
-                                                        "Unexpected Effect: {:?}",
-                                                        last_effect.name
-                                                    )
-                                                    .yellow()
-                                                );
+                                                println!("{}", "No Effect Present".yellow());
+                                                Timer::after_secs(1).await;
                                             }
-                                        } else {
-                                            println!("{}", "No Effect Present".yellow());
-                                            Timer::after_secs(1).await;
+                                        }
+                                        None => {
+                                            println!("No Data")
                                         }
                                     }
-                                    None => {
-                                        println!("No Data")
-                                    }
+                                }
+                                Commands::DeserializeError => {
+                                    println!("Received DeserializeError");
                                 }
                             }
-                            Commands::DeserializeError => todo!(),
-                        },
-                        Err(_) => todo!(),
+                        }
+                        Err(e) => {
+                            println!("Received Message Error: {:?}", e)
+                        }
                     }
                 }
             } else {
@@ -307,6 +326,7 @@ impl<'a> TcpSyncHandler<'a> {
                                         GraphManager::new(self.volume_manager.clone()).unwrap(),
                                     ),
                                 ));
+                                println!("{}", "Client State has been created".green());
                             }
                             Commands::GetSyncRequest => {}
                             Commands::SendSyncRequest(sync_data) => {}

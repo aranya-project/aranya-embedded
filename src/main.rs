@@ -206,8 +206,6 @@ async fn main(spawner: Spawner) {
         .config_v4()
         .inspect(|c| println!("ipv4 config: {c:?}"));
 
-    //let effect_sink = VecSink::new();
-
     println!("TCP server starting on port 8080");
 
     println!("Waiting for connection...");
