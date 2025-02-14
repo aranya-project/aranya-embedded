@@ -1,4 +1,4 @@
-use alloc::{boxed::Box, format, vec::Vec};
+use alloc::{boxed::Box, format, sync::Arc, vec::Vec};
 use aranya_crypto::{default::DefaultEngine, Csprng, Rng};
 use aranya_policy_vm::Value;
 use aranya_runtime::{
@@ -25,13 +25,19 @@ use postcard::{from_bytes, to_slice};
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
 use crate::{
-    aranya::{graph_store::GraphManager, sink::VecSink},
+    aranya::{graph_store::GraphManager, linear_store::imp::FileManager, sink::VecSink},
     hardware::{esp32_engine::ESP32Engine, esp32_time::Esp32TimeSource},
 };
 
 use super::format::Commands;
 
-//static mut LED: UnsafeCell<Option<Output<'static>>> = UnsafeCell::new(None);
+type VolumeMan = VolumeManager<
+    SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+    4,
+    4,
+    1,
+>;
 
 const MAX_MESSAGE_SIZE: usize = 1024; // Match the TCP buffer size
 const MAX_RETRY_TIME_MS: u64 = 1000; // Maximum retry time of 1 second
@@ -45,16 +51,10 @@ pub struct TcpSyncHandler<'a> {
     sync_requester: Option<SyncRequester<'a, ServerStub>>,
     graph_id: Option<GraphId>,
     buffer: [u8; MAX_MESSAGE_SIZE],
-    client:
-        Option<ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager<'a>>>>,
+    client: Option<ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager>>>,
     peer_cache: PeerCache,
     effect_sink: VecSink<VmEffect>,
-    volume_manager: Option<
-        &'a mut VolumeManager<
-            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
-    >,
+    volume_manager: Arc<VolumeMan>,
 }
 
 impl<'a> TcpSyncHandler<'a> {
@@ -62,12 +62,9 @@ impl<'a> TcpSyncHandler<'a> {
         socket: TcpSocket<'a>,
         storage_id: Option<GraphId>,
         client: Option<
-            ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager<'a>>>,
+            ClientState<ESP32Engine<DefaultEngine>, LinearStorageProvider<GraphManager>>,
         >,
-        volume_manager: &'a mut VolumeManager<
-            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
+        volume_manager: Arc<VolumeMan>,
     ) -> Self {
         Self {
             socket,
@@ -78,7 +75,7 @@ impl<'a> TcpSyncHandler<'a> {
             client,
             peer_cache: PeerCache::new(),
             effect_sink: VecSink::new(),
-            volume_manager: Some(volume_manager),
+            volume_manager,
         }
     }
 
@@ -306,10 +303,9 @@ impl<'a> TcpSyncHandler<'a> {
 
                                 self.client = Some(ClientState::new(
                                     policy,
-                                    LinearStorageProvider::new(GraphManager::new(
-                                        self.volume_manager.take().unwrap(),
-                                        graph_id,
-                                    )),
+                                    LinearStorageProvider::new(
+                                        GraphManager::new(self.volume_manager.clone()).unwrap(),
+                                    ),
                                 ));
                             }
                             Commands::GetSyncRequest => {}

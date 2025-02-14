@@ -8,7 +8,7 @@ use alloc::{
 use esp_println::println;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::hardware::esp32_time::Esp32TimeSource;
+use crate::{hardware::esp32_time::Esp32TimeSource, VolumeMan};
 use aranya_crypto::id::{String64, ToBase58};
 use aranya_runtime::{
     linear::{IoManager, Read, Write},
@@ -23,14 +23,6 @@ use esp_hal::{
     delay::Delay, gpio::Output, peripheral::Peripheral, peripherals::TIMG1, spi::master::Spi,
     timer::timg::TimerX,
 };
-
-type VolumeMan = VolumeManager<
-    SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-    4,
-    4,
-    1,
->;
 
 /// A file-backed implementation of [`IoManager`].
 #[clippy::has_significant_drop]
@@ -111,6 +103,19 @@ impl Writer {
         // Preallocate so we can start appending from FREE_START
         // forward.
         // ! This might mean he starts from FREE_START. ASK file.fallocate(0, FREE_START)?;
+        // Reset cursor to 0
+        file.volume_manager
+            .file_seek_from_start(*file.fd, 0)
+            .unwrap();
+        let buf = [0u8; FREE_START as usize];
+        match file.volume_manager.write(*file.fd.clone(), &buf) {
+            Ok(()) => {
+                println!("{:?} bytes allocated", buf.len())
+            }
+            Err(e) => {
+                panic!("{:?}", e);
+            }
+        }
         Ok(Self {
             file,
             root: Root::new(),
@@ -273,6 +278,10 @@ struct FileHandle {
 
 impl FileHandle {
     fn read_exact(&self, mut offset: i64, mut buf: &mut [u8]) -> Result<(), StorageError> {
+        // Set cursor to offset
+        self.volume_manager
+            .file_seek_from_start(*self.fd, offset as u32)
+            .unwrap(); // ! Causes panic, resolve later
         while !buf.is_empty() {
             match self.volume_manager.read(*self.fd.as_ref(), buf) {
                 Ok(0) => break,
@@ -297,6 +306,10 @@ impl FileHandle {
     }
 
     fn write_all(&self, mut offset: i64, buf: &[u8]) -> Result<(), StorageError> {
+        // Set cursor to offset for writing
+        self.volume_manager
+            .file_seek_from_start(*self.fd, offset as u32)
+            .unwrap();
         while !buf.is_empty() {
             match self.volume_manager.write(*self.fd.clone(), buf) {
                 Ok(()) => {

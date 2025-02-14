@@ -12,6 +12,7 @@ mod tasks;
 mod tcp;
 
 use alloc::format;
+use alloc::sync::Arc;
 use aranya::graph_store::GraphManager;
 use aranya::sink::VecSink;
 use aranya_crypto::default::DefaultEngine;
@@ -59,6 +60,14 @@ macro_rules! mk_static {
         x
     }};
 }
+
+pub type VolumeMan = VolumeManager<
+    SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
+    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+    4,
+    4,
+    1,
+>;
 
 #[main]
 async fn main(spawner: Spawner) {
@@ -144,16 +153,7 @@ async fn main(spawner: Spawner) {
         Timer::after(Duration::from_millis(100)).await;
     }
 
-    let volume_manager: &mut VolumeManager<
-        SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-        Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-    > = mk_static!(
-        VolumeManager<
-            SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
-        VolumeManager::new(sd_card, esp_timer_source)
-    );
+    let volume_manager = Arc::new(VolumeManager::new(sd_card, esp_timer_source));
 
     // Wifi peripheral and implementation initialization
     let wifi = peripherals.WIFI;
@@ -213,40 +213,41 @@ async fn main(spawner: Spawner) {
     println!("Waiting for connection...");
 
     let _buf = [0u8; 1024];
-    //loop {
-    // TCP receive and transmit buffer sizes. 1KB for each
     let mut rx_buffer = [0; 1024];
     let mut tx_buffer = [0; 1024];
-    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
+    loop {
+        // TCP receive and transmit buffer sizes. 1KB for each
+        let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 
-    match socket
-        .accept(IpListenEndpoint {
-            addr: None,
-            port: 8080,
-        })
-        .await
-    {
-        Ok(_) => {
-            println!("Client connected");
+        match socket
+            .accept(IpListenEndpoint {
+                addr: None,
+                port: 8080,
+            })
+            .await
+        {
+            Ok(_) => {
+                println!("Client connected");
 
-            // Aranya Graph, Manager, and State Initialization
-            // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
-            // Create New Graph With the Specified Effect Sink
+                // Aranya Graph, Manager, and State Initialization
+                // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
+                // Create New Graph With the Specified Effect Sink
 
-            let mut sync_handler = TcpSyncHandler::new(socket, None, None, volume_manager);
-            sync_handler
-                .handle_connection()
-                .await
-                .expect("Failed to handle connection");
-        }
-        Err(e) => {
-            // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets
-            println!("Accept error: {:?}", e);
-            // Close the current socket connection
-            socket.abort();
-            drop(socket);
-            Timer::after(Duration::from_millis(100)).await;
+                let mut sync_handler =
+                    TcpSyncHandler::new(socket, None, None, volume_manager.clone());
+                sync_handler
+                    .handle_connection()
+                    .await
+                    .expect("Failed to handle connection");
+            }
+            Err(e) => {
+                // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets
+                println!("Accept error: {:?}", e);
+                // Close the current socket connection
+                socket.abort();
+                drop(socket);
+                Timer::after(Duration::from_millis(100)).await;
+            }
         }
     }
-    //}
 }
