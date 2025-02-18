@@ -555,3 +555,5 @@ fn truncate_filename(name: String, max_base_length: usize) -> String {
         format!("{}.{}", truncated_base, extension)
     }
 }
+
+// ! Implement RawFile closing within VolumeManager Arc or Rc upon error in sync/droping of this struct as it would result in blocking RawFile handles

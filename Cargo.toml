@@ -89,6 +89,7 @@ rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "byt
 
 [profile.dev]
 # Rust debug is too slow.
+codegen-units = 1
 # For debug builds always builds with some optimization
 opt-level = "s"
 
