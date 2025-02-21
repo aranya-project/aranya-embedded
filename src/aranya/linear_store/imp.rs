@@ -8,21 +8,13 @@ use alloc::{
 use esp_println::println;
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 
-use crate::{hardware::esp32_time::Esp32TimeSource, VolumeMan};
+use crate::VolumeMan;
 use aranya_crypto::id::{String64, ToBase58};
 use aranya_runtime::{
     linear::{IoManager, Read, Write},
     GraphId, Location, StorageError,
 };
-use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_sdmmc::{
-    BlockDevice, Directory, File, Mode, RawFile, RawVolume, SdCard, TimeSource, Volume, VolumeIdx,
-    VolumeManager,
-};
-use esp_hal::{
-    delay::Delay, gpio::Output, peripheral::Peripheral, peripherals::TIMG1, spi::master::Spi,
-    timer::timg::TimerX,
-};
+use embedded_sdmmc::{Mode, RawFile, VolumeIdx};
 
 /// A file-backed implementation of [`IoManager`].
 #[clippy::has_significant_drop]

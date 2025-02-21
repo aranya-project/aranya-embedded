@@ -1,7 +1,3 @@
-use aranya_crypto;
-use aranya_crypto_ffi;
-use aranya_device_ffi;
-use aranya_envelope_ffi;
 use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
 use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
@@ -15,26 +11,18 @@ use std::io::Write;
 use std::path::Path;
 
 #[derive(serde::Deserialize)]
-pub struct AccessPointConfiguration {
+pub struct ClientConfiguration {
+    /// The SSID of the Wi-Fi network.
     pub ssid: String,
-    pub ssid_hidden: bool,
-    pub channel: u8,
-    pub secondary_channel: Option<u8>,
-    pub protocols: Vec<Protocol>,
+    /// The BSSID (MAC address) of the client.
+    pub bssid: Option<[u8; 6]>,
+    // pub protocol: Protocol,
+    /// The authentication method for the Wi-Fi connection.
     pub auth_method: AuthMethod,
+    /// The password for the Wi-Fi connection.
     pub password: String,
-    pub max_connections: u16,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub enum Protocol {
-    P802D11B,
-    P802D11BG,
-    #[default]
-    P802D11BGN,
-    P802D11BGNLR,
-    P802D11LR,
-    P802D11BGNAX,
+    /// The Wi-Fi channel to connect to.
+    pub channel: Option<u8>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -61,7 +49,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read and validate the configuration
     let config_str = fs::read_to_string(config_path)?;
-    let config: AccessPointConfiguration = from_str(&config_str)?;
+    let config: ClientConfiguration = from_str(&config_str)?;
 
     // Setup output path
     let out_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
@@ -75,30 +63,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Write the configuration to file
     let content = format!(
         r#"use core::str::FromStr;
-use esp_wifi::wifi::{{AccessPointConfiguration, AuthMethod, Protocol}};
+use esp_wifi::wifi::{{AuthMethod, ClientConfiguration}};
 use heapless::String;
 
-pub fn wifi_config() -> AccessPointConfiguration {{
-    AccessPointConfiguration {{
-        ssid: String::<32>::from_str("{}").expect("SSID Error"),
-        ssid_hidden: {},
-        channel: {},
-        secondary_channel: {:?},
-        protocols: ({}).into(),
-        auth_method: AuthMethod::{:?},
-        password: String::<64>::from_str("{}").expect("Password Error"),
-        max_connections: {},
+pub fn wifi_config() -> ClientConfiguration {{
+    ClientConfiguration {{
+        ssid: String::from_str("{ssid}").unwrap(),
+        bssid: {bssid},
+        auth_method: AuthMethod::{auth:?},
+        password: String::from_str("{pass}").unwrap(),
+        channel: {channel:?},
     }}
 }}
 "#,
-        config.ssid,
-        config.ssid_hidden,
-        config.channel,
-        config.secondary_channel,
-        protocols_to_bitflag(&config.protocols),
-        config.auth_method,
-        config.password,
-        config.max_connections
+        ssid = config.ssid,
+        bssid = match config.bssid {
+            Some(bytes) => format!(
+                "Some([0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}])",
+                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]
+            ),
+            None => "None".to_string(),
+        },
+        auth = config.auth_method,
+        pass = config.password,
+        channel = config.channel,
     );
 
     File::create(&dest_path)?.write_all(content.as_bytes())?;
@@ -111,18 +99,6 @@ pub fn wifi_config() -> AccessPointConfiguration {{
     println!("cargo:rerun-if-changed=build.rs");
 
     Ok(())
-}
-
-fn protocols_to_bitflag(protocols: &[Protocol]) -> String {
-    if protocols.is_empty() {
-        return "Protocol::P802D11BGN".to_string();
-    }
-
-    protocols
-        .iter()
-        .map(|p| format!("Protocol::{:?}", p))
-        .collect::<Vec<_>>()
-        .join(" | ")
 }
 
 fn aranya_setup() {

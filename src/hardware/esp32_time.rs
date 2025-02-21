@@ -1,29 +1,24 @@
 use embedded_sdmmc::{TimeSource, Timestamp};
-use esp_hal::prelude::*;
-use esp_hal::{
-    timer::timg::{Instance, Timer},
-    Blocking,
-};
+use esp_hal::timer::Timer;
 
 /*
 The timer works off microseconds. We can change the prescaler to make it milli or normal seconds but focus was on other matters.
 */
 
 // Instance is a trait within timg or the Timer Group module that holds a particular instance of a timer. It implements the main timing methods such as `.start()` or `now()`. Timer is a General purpose timer struct. In the ESP32 there are 2 timer groups, Timer0 and Timer1. TimerX indicates that we accept either of them. Within each Timer driver you can chose for its functionality to be Blocking or Async. In short timer selects that we want a Timer driver of either timer group that's blocking. Within TimerX we hold the actual peripheral timer of the timer group that we're referring to, such as TIMG0 or TIMG1. In short the signature is Driver<TimerGroup<TimerPeripheral>,DrivingProtocol>. For additional clarification there are two hardware timer groups, Timer0 and Timer1. Each group has two general-purpose hardware timers TIMG0 or TIMG1 for a total of 4 timers.
-pub struct Esp32TimeSource<I>
+pub struct Esp32TimeSource<T>
 where
-    I: Instance,
+    T: Timer,
 {
-    timer: Timer<I, Blocking>,
+    timer: T,
     start_time: Timestamp,
 }
 
-impl<I> Esp32TimeSource<I>
+impl<T> Esp32TimeSource<T>
 where
-    // Instance is a trait defined in the ESP32 HAL (Hardware Abstraction Layer) that represents the common functionality for timer instances
-    I: Instance,
+    T: Timer,
 {
-    pub fn new(timer: Timer<I, Blocking>, start_time: Timestamp) -> Self {
+    pub fn new(timer: T, start_time: Timestamp) -> Self {
         let esp32_timer = Self { timer, start_time };
         esp32_timer.timer.reset();
         esp32_timer.timer.start();
@@ -39,9 +34,9 @@ where
 /*
 Max of u64 is 18446744073709551615 so to estimate the max of the timer in years we divide that by 1000000, 60, 60, 24, 365 for microseconds to seconds to minutes to hours to days to years. It will last 584942.417355 years assuming no synchronization.
 */
-impl<I> TimeSource for Esp32TimeSource<I>
+impl<T> TimeSource for Esp32TimeSource<T>
 where
-    I: Instance,
+    T: Timer,
 {
     fn get_timestamp(&self) -> Timestamp {
         let elapsed_seconds = self.timer.now().ticks() / 1_000_000;

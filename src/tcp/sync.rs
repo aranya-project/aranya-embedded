@@ -1,39 +1,26 @@
 use alloc::{format, rc::Rc, vec::Vec};
-use aranya_crypto::{default::DefaultEngine, Csprng, Rng};
+use aranya_crypto::{default::DefaultEngine, Rng};
 use aranya_policy_vm::Value;
 use aranya_runtime::{
     linear::LinearStorageProvider, ClientState, GraphId, PeerCache, SyncError, SyncRequester,
     VmEffect,
 };
 use embassy_net::tcp::TcpSocket;
-use embassy_time::{Duration, Timer};
-use embedded_hal_bus::spi::ExclusiveDevice;
+use embassy_time::Duration;
 use embedded_io::{ReadReady, WriteReady};
-use embedded_io_async::{Read, Write};
-use embedded_sdmmc::{SdCard, VolumeManager};
-use esp_hal::{
-    delay::Delay, gpio::Output, peripheral::Peripheral, peripherals::TIMG1, spi::master::Spi,
-    timer::timg::TimerX,
-};
+use embedded_io_async::Write;
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_slice};
 use serde::{Deserialize, Serialize};
 
 use crate::{
-    aranya::{graph_store::GraphManager, linear_store::imp::FileManager, sink::VecSink},
-    hardware::{esp32_engine::ESP32Engine, esp32_time::Esp32TimeSource},
+    aranya::{graph_store::GraphManager, sink::VecSink},
+    hardware::esp32_engine::ESP32Engine,
+    VolumeMan,
 };
 
 use super::format::Commands;
-
-type VolumeMan = VolumeManager<
-    SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-    4,
-    4,
-    1,
->;
 
 const MAX_MESSAGE_SIZE: usize = 1024; // Match the TCP buffer size
 const MAX_RETRY_TIME_MS: u64 = 1000; // Maximum retry time of 1 second
@@ -129,7 +116,7 @@ impl<'a> TcpSyncHandler<'a> {
                     match from_bytes::<Commands>(&temp_buffer[..read_position]) {
                         Ok(command) => return Ok(command),
                         Err(_) => {
-                            Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
+                            embassy_time::Timer::after(Duration::from_millis(RETRY_DELAY_MS)).await;
                         }
                     }
                 }
@@ -279,7 +266,7 @@ impl<'a> TcpSyncHandler<'a> {
                                                 }
                                             } else {
                                                 println!("{}", "No Effect Present".yellow());
-                                                Timer::after_secs(1).await;
+                                                embassy_time::Timer::after_secs(1).await;
                                             }
                                         }
                                         None => {
@@ -334,7 +321,7 @@ impl<'a> TcpSyncHandler<'a> {
                 }
             }
             // todo check if timer is necessary at all
-            Timer::after(Duration::from_millis(250)).await;
+            embassy_time::Timer::after(Duration::from_millis(250)).await;
         }
         Ok(())
     }

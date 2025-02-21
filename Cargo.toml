@@ -4,25 +4,26 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-esp-backtrace = { version = "0.14.2", features = [
+esp-backtrace = { version = "0.15.0", features = [
     "esp32",
     "exception-handler",
     "panic-handler",
     "println",
 ]}
 
-esp-hal = { version = "0.22.0", features = [
+esp-hal = { version = "0.23.1", features = [
     "esp32",
+    "unstable"
 ] }
-esp-println = { version = "0.12.0", features = ["esp32", "log"] }
+esp-println = { version = "0.13.0", features = ["esp32", "log"] }
 log = { version = "0.4.21" }
-esp-alloc = { version = "0.5.0" }
+esp-alloc = { version = "0.6.0" }
 embedded-io = "0.6.1"
 
 embedded-io-async = "0.6.1"
-embassy-net = { version = "0.4.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
+embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
 
-esp-wifi = { version = "0.11.0", default-features=false, features = [
+esp-wifi = { version = "0.12.0", default-features=false, features = [
     "esp32",
     "utils",
     "wifi",
@@ -30,10 +31,9 @@ esp-wifi = { version = "0.11.0", default-features=false, features = [
     "log",
 ] }
 heapless = { version = "0.8.0", default-features = false }
-smoltcp = { version = "0.11.0", default-features = false, features = [
-    "medium-ethernet",
+smoltcp = { version = "0.12.0", default-features = false, features = [
+    "medium-ip",
     "proto-dhcpv4",
-    "proto-igmp",
     "proto-ipv4",
     "socket-dhcpv4",
     "socket-icmp",
@@ -41,23 +41,23 @@ smoltcp = { version = "0.11.0", default-features = false, features = [
     "socket-tcp",
     "socket-udp",
 ] }
-embassy-executor = { version = "0.6.0",  features = [
+embassy-executor = { version = "0.7.0",  features = [
     "nightly",
 ] }
-embassy-time     = { version = "0.3.1",  features = ["generic-queue-8"] }
-esp-hal-embassy  = { version = "0.5.0",  features = ["esp32"] }
+embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
+esp-hal-embassy  = { version = "0.6.0",  features = ["esp32"] }
 static_cell      = { version = "2.1.0", features = ["nightly"] }
 enumset = "1.1.5"
-edge-dhcp = "0.3.0"
-edge-nal = "0.3.0"
-edge-nal-embassy = "0.3.0"
+edge-dhcp = "0.5.0"
+edge-nal = "0.5.0"
+edge-nal-embassy = "0.5.0"
 critical-section = "1.2.0"
 # Used git as read is still with mutable ref in the crate
 embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
-embedded-hal-bus = "0.2.0"
+embedded-hal-bus = "0.3.0"
 owo-colors = "4.1.0"
 embedded-hal = "1.0.0"
-getrandom = { version = "0.2.15", features = ["custom"] }
+getrandom = { version = "0.2.15", features = ["custom"]}
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 aranya-runtime = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-runtime" }
@@ -71,6 +71,7 @@ aranya-perspective-ffi = { git = "https://github.com/rfraser-spideroak/aranya-co
 aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
+fugit = "0.3.7"
 
 [build-dependencies]
 ron = "0.8.1"
@@ -95,9 +96,11 @@ opt-level = "s"
 
 [profile.release]
 codegen-units = 1        # LLVM can perform better optimizations using a single thread
-debug = 2
+debug = false
 debug-assertions = false
 incremental = false
 lto = 'fat'
-opt-level = 3
+opt-level = "s"
 overflow-checks = false
+strip = true
+panic = "abort"

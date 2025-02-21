@@ -13,32 +13,29 @@ mod tcp;
 
 use alloc::format;
 use alloc::rc::Rc;
-use alloc::sync::Arc;
-use core::str::FromStr;
 use embassy_executor::Spawner;
 use embassy_net::tcp::TcpSocket;
-use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
-use embassy_net::{Ipv4Cidr, StaticConfigV4};
-use embassy_time::{Duration, Timer};
+use embassy_net::{IpListenEndpoint, StackResources};
+use embassy_time::Duration;
+use hardware::esp32_rng::esp32_getrandom;
+
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_sdmmc::{SdCard, Timestamp, VolumeManager};
 use esp_backtrace as _;
+use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Io, Level, Output};
-use esp_hal::peripheral::Peripheral;
-use esp_hal::peripherals::TIMG1;
 use esp_hal::spi::master::{Config, Spi};
-use esp_hal::spi::SpiMode;
-use esp_hal::timer::timg::TimerX;
-use esp_hal::{prelude::*, timer::timg::TimerGroup};
+use esp_hal::timer::timg::{Timer, TimerGroup};
+use esp_hal_embassy::main;
 use esp_println::println;
-use esp_wifi::wifi::{WifiApDevice, WifiDevice};
+use esp_wifi::wifi::WifiStaDevice;
 use esp_wifi::EspWifiController;
 use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
 use owo_colors::OwoColorize;
-use tasks::router_host::{connection, net_task, run_dhcp};
+use tasks::client::connection;
 use tcp::sync::TcpSyncHandler;
 
 // ! Panics will result in lockout if early enough so try to convert to using results that don't panic
@@ -55,7 +52,7 @@ macro_rules! mk_static {
 
 pub type VolumeMan = VolumeManager<
     SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,
-    Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
+    Esp32TimeSource<Timer>,
     4,
     4,
     1,
@@ -112,16 +109,50 @@ async fn main(spawner: Spawner) {
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
     let cs: Output<'static> = Output::new(peripherals.GPIO13, Level::High) as Output<'static>;
-    let spi: Spi<'static, esp_hal::Blocking> = Spi::new_with_config(
-        peripherals.SPI2,
-        Config {
-            frequency: 100u32.kHz(),
-            mode: SpiMode::Mode0,
-            ..Default::default()
-        },
-    );
+    let spi: Spi<'static, esp_hal::Blocking> =
+        Spi::new(peripherals.SPI2, Config::default()).unwrap();
     let spi: Spi<'static, esp_hal::Blocking> = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
 
+    // Initialize wifi device with mode
+    let (mut device, controller) =
+        esp_wifi::wifi::new_with_mode(wifi_cont, peripherals.WIFI, WifiStaDevice).unwrap();
+    let config = embassy_net::Config::dhcpv4(Default::default());
+
+    let mut buffer = [0u8; 8]; // u64 is 8 bytes
+    esp32_getrandom(&mut buffer);
+    let seed = u64::from_le_bytes(buffer);
+
+    // Init network stack
+    let (stack, runner) = embassy_net::new(
+        device,
+        config,
+        mk_static!(StackResources<3>, StackResources::<3>::new()),
+        seed,
+    );
+
+    /*
+        // network interface (iface) instance
+        let iface = smoltcp::iface::Interface::new(
+            // I have no idea why using ethernet works here
+            smoltcp::iface::Config::new(smoltcp::wire::HardwareAddress::Ethernet(
+                smoltcp::wire::EthernetAddress::from_bytes(&device.mac_address()),
+            )),
+            &mut device,
+            smoltcp::time::Instant::from_micros(now().duration_since_epoch().to_micros() as i64),
+        );
+
+        let mut socket_set_entries: [SocketStorage; 3] = Default::default();
+        let mut socket_set = SocketSet::new(&mut socket_set_entries[..]);
+        let mut dhcp_socket = smoltcp::socket::dhcpv4::Socket::new();
+        // we can set a hostname here (or add other DHCP options)
+        dhcp_socket.set_outgoing_options(&[DhcpOption {
+            kind: 12,
+            data: b"LighthouseWifi",
+        }]);
+        socket_set.add(dhcp_socket);
+
+        let stack = Stack::new(iface, socket_set, rng.random());
+    */
     // SD Card Initialization
     println!("SD Card intialization");
     let delay = Delay::new();
@@ -142,67 +173,17 @@ async fn main(spawner: Spawner) {
             "{}",
             format!("Card Type is {:?}", sd_card.get_card_type()).blue()
         );
-        Timer::after(Duration::from_millis(100)).await;
+        embassy_time::Timer::after(Duration::from_millis(100)).await;
     }
 
     let volume_manager = Rc::new(VolumeManager::new(sd_card, esp_timer_source));
 
-    // Wifi peripheral and implementation initialization
-    let wifi = peripherals.WIFI;
-    let (wifi_interface, controller) =
-        esp_wifi::wifi::new_with_mode(wifi_cont, wifi, WifiApDevice).unwrap();
-
-    // Server IP set
-    let gw_ip_addr_str = "192.168.2.1";
-    let gw_ip_addr = Ipv4Address::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
-
-    // Main configuration for the wifi stack in how it should set up internal and external IPs.
-    let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(gw_ip_addr, 24), // Creates a subnet with mask /24 (255.255.255.0)
-        gateway: Some(gw_ip_addr),              // Sets the gateway IP
-        dns_servers: Default::default(),        // No DNS servers configured
-    });
-
-    let seed = 1234; // Used for generating TCP/IP sequence numbers. //! Bad seed but acceptable for demonstration
-
-    // Init network stack hosted on ESP32
-    let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiApDevice>>,
-        Stack::new(
-            wifi_interface,
-            config,
-            mk_static!(StackResources<16>, StackResources::<16>::new()),
-            seed
-        )
-    );
-
-    // Running the network stack for handling communication events
-    spawner.spawn(net_task(stack)).ok();
-
     // Wait a bit for net_task to initialize
-    Timer::after(Duration::from_millis(100)).await;
+    embassy_time::Timer::after(Duration::from_millis(100)).await;
 
     // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
     // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
-    // Running DHCP for internal IP setting
-    spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
-
-    loop {
-        if stack.is_link_up() {
-            break;
-        }
-        Timer::after(Duration::from_millis(500)).await;
-    }
-
-    while !stack.is_config_up() {
-        Timer::after(Duration::from_millis(100)).await
-    }
-    stack
-        .config_v4()
-        .inspect(|c| println!("ipv4 config: {c:?}"));
-
-    println!("TCP server starting on port 8080");
 
     println!("Waiting for connection...");
 
@@ -240,7 +221,7 @@ async fn main(spawner: Spawner) {
                 // Close the current socket connection
                 socket.abort();
                 drop(socket);
-                Timer::after(Duration::from_millis(100)).await;
+                embassy_time::Timer::after(Duration::from_millis(100)).await;
             }
         }
     }

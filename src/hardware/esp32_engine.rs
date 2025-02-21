@@ -52,7 +52,7 @@ where
 
 impl<E> aranya_runtime::Engine for ESP32Engine<E>
 where
-    E: aranya_crypto::Engine + ?Sized,
+    E: aranya_crypto::Engine,
 {
     type Policy = VmPolicy<E>;
     type Effect = VmEffect;
