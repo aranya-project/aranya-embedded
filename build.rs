@@ -11,32 +11,11 @@ use std::io::Write;
 use std::path::Path;
 
 #[derive(serde::Deserialize)]
-pub struct ClientConfiguration {
+pub struct BaseConfiguration {
     /// The SSID of the Wi-Fi network.
     pub ssid: String,
-    /// The BSSID (MAC address) of the client.
-    pub bssid: Option<[u8; 6]>,
-    // pub protocol: Protocol,
-    /// The authentication method for the Wi-Fi connection.
-    pub auth_method: AuthMethod,
     /// The password for the Wi-Fi connection.
     pub password: String,
-    /// The Wi-Fi channel to connect to.
-    pub channel: Option<u8>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub enum AuthMethod {
-    None,
-    WEP,
-    WPA,
-    #[default]
-    WPA2Personal,
-    WPAWPA2Personal,
-    WPA2Enterprise,
-    WPA3Personal,
-    WPA2WPA3Personal,
-    WAPIPersonal,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -49,7 +28,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read and validate the configuration
     let config_str = fs::read_to_string(config_path)?;
-    let config: ClientConfiguration = from_str(&config_str)?;
+    let config: BaseConfiguration = from_str(&config_str)?;
 
     // Setup output path
     let out_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
@@ -62,31 +41,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Write the configuration to file
     let content = format!(
-        r#"use core::str::FromStr;
-use esp_wifi::wifi::{{AuthMethod, ClientConfiguration}};
-use heapless::String;
-
-pub fn wifi_config() -> ClientConfiguration {{
-    ClientConfiguration {{
-        ssid: String::from_str("{ssid}").unwrap(),
-        bssid: {bssid},
-        auth_method: AuthMethod::{auth:?},
-        password: String::from_str("{pass}").unwrap(),
-        channel: {channel:?},
-    }}
-}}
+        r#"pub const WIFI_SSID: &str = "{ssid}";
+pub const WIFI_PASSWORD: &str = "{pass}";
 "#,
         ssid = config.ssid,
-        bssid = match config.bssid {
-            Some(bytes) => format!(
-                "Some([0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}, 0x{:02x}])",
-                bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5]
-            ),
-            None => "None".to_string(),
-        },
-        auth = config.auth_method,
         pass = config.password,
-        channel = config.channel,
     );
 
     File::create(&dest_path)?.write_all(content.as_bytes())?;

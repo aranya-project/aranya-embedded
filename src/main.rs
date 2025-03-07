@@ -14,6 +14,7 @@ mod tcp;
 use alloc::format;
 use alloc::rc::Rc;
 use embassy_executor::Spawner;
+use embassy_net::driver::Driver;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, StackResources};
 use embassy_time::Duration;
@@ -29,13 +30,14 @@ use esp_hal::spi::master::{Config, Spi};
 use esp_hal::timer::timg::{Timer, TimerGroup};
 use esp_hal_embassy::main;
 use esp_println::println;
-use esp_wifi::wifi::WifiStaDevice;
+use esp_wifi::wifi::{WifiDevice, WifiDeviceMode, WifiMode, WifiStaDevice};
 use esp_wifi::EspWifiController;
 use hardware::esp32_time::Esp32TimeSource;
 use heap::init_heap;
 use log::info;
 use owo_colors::OwoColorize;
-use tasks::client::connection;
+use tasks::client::{connection, net_task};
+//use tasks::client::connection;
 use tcp::sync::TcpSyncHandler;
 
 // ! Panics will result in lockout if early enough so try to convert to using results that don't panic
@@ -178,12 +180,10 @@ async fn main(spawner: Spawner) {
 
     let volume_manager = Rc::new(VolumeManager::new(sd_card, esp_timer_source));
 
-    // Wait a bit for net_task to initialize
-    embassy_time::Timer::after(Duration::from_millis(100)).await;
-
     // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
     // Starting device as an access point
     spawner.spawn(connection(controller)).ok();
+    spawner.spawn(net_task(runner)).ok();
 
     println!("Waiting for connection...");
 
@@ -191,6 +191,14 @@ async fn main(spawner: Spawner) {
     let mut rx_buffer = [0; 1024];
     let mut tx_buffer = [0; 1024];
     loop {
+        if let Some(config) = stack.config_v4() {
+            println!("IP address: {:?}", config);
+        } else {
+            println!("No configuration detected, returning control back to scheduler to manage wifi connection");
+            // Wait a bit for the networking tasks to initialize
+            embassy_time::Timer::after(Duration::from_millis(1000)).await;
+            continue;
+        }
         // TCP receive and transmit buffer sizes. 1KB for each
         let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
 

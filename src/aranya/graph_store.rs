@@ -28,7 +28,7 @@ The location binary represents a vector which iterates through every command in 
 
 // Single threaded implementation therefore we only need Rc and RefCell, not Rc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
 // ! todo remove redundant Rc<>
-
+// ! Todo, remove truncate so it doesn't reset
 pub struct GraphManager {
     vol: Rc<VolumeMan>,
 }

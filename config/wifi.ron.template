@@ -2,8 +2,5 @@
 
 ClientConfiguration(
     ssid: "MyNetwork",
-    bssid: Some((0x00, 0x00, 0x00, 0x00, 0x00, 0x00)),
-    auth_method: AuthMethod::WPA2WPA3Personal,
     password: "MyPassword",
-    channel: Some(1),
 )
