@@ -7,7 +7,6 @@ extern crate alloc;
 mod aranya;
 mod built;
 mod hardware;
-mod heap;
 mod tasks;
 mod tcp;
 
@@ -18,6 +17,7 @@ use embassy_net::driver::Driver;
 use embassy_net::tcp::TcpSocket;
 use embassy_net::{IpListenEndpoint, StackResources};
 use embassy_time::Duration;
+use esp_hal::psram;
 use hardware::esp32_rng::esp32_getrandom;
 
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -33,7 +33,6 @@ use esp_println::println;
 use esp_wifi::wifi::{WifiDevice, WifiDeviceMode, WifiMode, WifiStaDevice};
 use esp_wifi::EspWifiController;
 use hardware::esp32_time::Esp32TimeSource;
-use heap::init_heap;
 use log::info;
 use owo_colors::OwoColorize;
 use tasks::client::{connection, net_task};
@@ -62,14 +61,13 @@ pub type VolumeMan = VolumeManager<
 
 #[main]
 async fn main(spawner: Spawner) {
-    init_heap();
-
     // Initialize peripherals
     let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
+        let mut config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
         config
     });
+
+    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     esp_println::logger::init_logger_from_env();
 
@@ -111,6 +109,7 @@ async fn main(spawner: Spawner) {
     let miso = peripherals.GPIO2;
     let mosi = peripherals.GPIO15;
     let cs: Output<'static> = Output::new(peripherals.GPIO13, Level::High) as Output<'static>;
+
     let spi: Spi<'static, esp_hal::Blocking> =
         Spi::new(peripherals.SPI2, Config::default()).unwrap();
     let spi: Spi<'static, esp_hal::Blocking> = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);

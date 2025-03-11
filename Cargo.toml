@@ -13,7 +13,7 @@ esp-backtrace = { version = "0.15.0", features = [
 
 esp-hal = { version = "0.23.1", features = [
     "esp32",
-    "unstable"
+    "unstable", "quad-psram"
 ] }
 esp-println = { version = "0.13.0", features = ["esp32", "log"] }
 log = { version = "0.4.21" }
@@ -45,7 +45,7 @@ embassy-executor = { version = "0.7.0",  features = [
     "nightly",
 ] }
 embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
-esp-hal-embassy  = { version = "0.6.0", features = ["esp32"] }
+esp-hal-embassy  = { version = "0.6.0",  features = ["esp32"] }
 static_cell      = { version = "2.1.0", features = ["nightly"] }
 enumset = "1.1.5"
 edge-dhcp = "0.5.0"
