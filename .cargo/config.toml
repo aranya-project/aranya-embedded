@@ -1,4 +1,4 @@
-[target.xtensa-esp32-none-elf]
+[target.xtensa-esp32s3-none-elf]
 runner = "espflash flash --monitor"
 
 [env]
@@ -11,7 +11,7 @@ rustflags = [
   "-Z", "stack-protector=all",
 ]
 
-target = "xtensa-esp32-none-elf"
+target = "xtensa-esp32s3-none-elf"
 
 [unstable]
 build-std = ["alloc", "core"]
