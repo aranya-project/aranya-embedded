@@ -4,34 +4,63 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-runtime" }
+aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-ifgen" }
+aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-vm" }
+aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto" }
+aranya-envelope-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-envelope-ffi" }
+aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto-ffi" }
+aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-device-ffi" }
+aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-idam-ffi" }
+aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-perspective-ffi" }
+aranya-base58 = "0.1.0"
+aranya-buggy = "0.1.0"
+critical-section = "1.2.0"
+embassy-executor = { version = "0.7.0",  features = ["nightly"] }
+embassy-sync = "0.6"
+embassy-time = { version = "0.4.0",  features = ["generic-queue-8"] }
+embedded-hal = "1.0.0"
+embedded-io = "0.6.1"
+embedded-io-async = "0.6.1"
+enumset = "1.1.5"
+esp-alloc = { version = "0.6.0" }
 esp-backtrace = { version = "0.15.0", features = [
     "esp32s3",
     "exception-handler",
     "panic-handler",
     "println",
 ]}
-
 esp-hal = { version = "0.23.1", features = [
     "esp32s3",
     "unstable", 
     "quad-psram"
 ] }
+esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
 esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
+fugit = "0.3.7"
+getrandom = { version = "0.2.15", features = ["custom"]}
+heapless = { version = "0.8.0", default-features = false }
 log = { version = "0.4.21" }
-esp-alloc = { version = "0.6.0" }
-embedded-io = "0.6.1"
+owo-colors = "4.1.0"
+postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
+rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
+serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
+static_cell = { version = "2.1.0", features = ["nightly"] }
+thiserror = { version = "2", default-features = false }
 
-embedded-io-async = "0.6.1"
-embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet"] }
-
+# Dependencies enabled for "wifi"
+embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet" ], optional = true }
+embedded-nal-async = { version = "0.8", optional = true }
+edge-dhcp = {version = "0.5.0", optional = true }
+edge-nal = {version = "0.5.0", optional = true }
+edge-nal-embassy = {version = "0.5.0", optional = true }
 esp-wifi = { version = "0.12.0", default-features=false, features = [
     "esp32s3",
     "utils",
     "wifi",
     "esp-alloc",
     "log",
-] }
-heapless = { version = "0.8.0", default-features = false }
+], optional = true }
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "medium-ip",
     "proto-dhcpv4",
@@ -41,53 +70,64 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
     "socket-raw",
     "socket-tcp",
     "socket-udp",
-] }
-embassy-executor = { version = "0.7.0",  features = [
-    "nightly",
-] }
-embassy-time     = { version = "0.4.0",  features = ["generic-queue-8"] }
-esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
-static_cell      = { version = "2.1.0", features = ["nightly"] }
-enumset = "1.1.5"
-edge-dhcp = "0.5.0"
-edge-nal = "0.5.0"
-edge-nal-embassy = "0.5.0"
-critical-section = "1.2.0"
-# Used git as read is still with mutable ref in the crate
-embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
-embedded-hal-bus = "0.3.0"
-owo-colors = "4.1.0"
-embedded-hal = "1.0.0"
-getrandom = { version = "0.2.15", features = ["custom"]}
-postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
-serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
-aranya-runtime = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-runtime" }
-aranya-policy-vm = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-vm" }
-aranya-crypto = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto" }
-aranya-envelope-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-envelope-ffi" }
-aranya-crypto-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto-ffi" }
-aranya-device-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-device-ffi" }
-aranya-idam-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-idam-ffi" }
-aranya-perspective-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-perspective-ffi" }
-aranya-base58 = "0.1.0"
-aranya-buggy = "0.1.0"
-rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
-fugit = "0.3.7"
+], optional = true }
+
+# Enabled by "storage-internal" feature
+embedded-storage = { version = "0.3", optional = true }
+esp-partition-table = { version = "0.1", features = ["heapless"], optional = true }
+esp-storage = { version = "0.5", features = ["esp32s3"], optional = true }
+
+# Enabled by "storage-sd" feature
+embedded-hal-bus = { version = "0.3.0", optional = true }
+# Used git as VolumeManager::read still receives `&mut self` in 0.8.1
+embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs", optional = true }
+
+# Enabled by "net-irda" feature
+#esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
 
 [build-dependencies]
 ron = "0.8.1"
 serde = {version = "1.0.215", features = ["derive"] }
-aranya-policy-lang = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-lang" }
-aranya-policy-compiler = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-compiler" }
-aranya-policy-vm = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-policy-vm" }
-aranya-runtime = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-runtime" }
-aranya-envelope-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-envelope-ffi" }
-aranya-crypto-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto-ffi" }
-aranya-device-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-device-ffi" }
-aranya-crypto = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-crypto" }
-aranya-idam-ffi = { git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-idam-ffi" }
-aranya-perspective-ffi = {git = "https://github.com/rfraser-spideroak/aranya-core", package = "aranya-perspective-ffi"}
+aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-lang" }
+aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-compiler" }
+aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-vm" }
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-runtime" }
+aranya-envelope-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-envelope-ffi" }
+aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto-ffi" }
+aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-device-ffi" }
+aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto" }
+aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-idam-ffi" }
+aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-perspective-ffi" }
+aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-ifgen-build" }
+postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
+
+[features]
+default = ["storage-sd", "net-wifi", "net-irda"]
+
+storage-internal = [
+    "dep:embedded-storage",
+    "dep:esp-partition-table",
+    "dep:esp-storage",
+]
+
+storage-sd = [
+    "dep:embedded-hal-bus",
+    "dep:embedded-sdmmc",
+]
+
+net-wifi = [
+    "dep:esp-wifi",
+    "dep:embassy-net",
+    "dep:embedded-nal-async",
+    "dep:edge-dhcp",
+    "dep:edge-nal",
+    "dep:edge-nal-embassy",
+    "dep:esp-wifi",
+    "dep:smoltcp",
+]
+
+net-irda = []
 
 [profile.dev]
 # Rust debug is too slow.

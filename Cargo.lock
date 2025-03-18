@@ -115,7 +115,7 @@ dependencies = [
 [[package]]
 name = "aranya-crypto"
 version = "0.2.1"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "buggy",
  "bytecheck",
@@ -131,23 +131,25 @@ dependencies = [
  "siphasher",
  "spideroak-base58",
  "spideroak-crypto",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-crypto-ffi"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
  "postcard",
+ "thiserror",
  "tracing",
 ]
 
 [[package]]
 name = "aranya-device-ffi"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -166,6 +168,8 @@ dependencies = [
  "aranya-idam-ffi",
  "aranya-perspective-ffi",
  "aranya-policy-compiler",
+ "aranya-policy-ifgen",
+ "aranya-policy-ifgen-build",
  "aranya-policy-lang",
  "aranya-policy-vm",
  "aranya-runtime",
@@ -175,18 +179,23 @@ dependencies = [
  "edge-nal-embassy",
  "embassy-executor",
  "embassy-net",
+ "embassy-sync",
  "embassy-time",
  "embedded-hal 1.0.0",
  "embedded-hal-bus",
  "embedded-io 0.6.1",
  "embedded-io-async",
+ "embedded-nal-async",
  "embedded-sdmmc",
+ "embedded-storage",
  "enumset",
  "esp-alloc",
  "esp-backtrace",
  "esp-hal",
  "esp-hal-embassy",
+ "esp-partition-table",
  "esp-println",
+ "esp-storage",
  "esp-wifi",
  "fugit",
  "getrandom",
@@ -199,33 +208,36 @@ dependencies = [
  "serde",
  "smoltcp",
  "static_cell",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-envelope-ffi"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
+ "thiserror",
  "tracing",
 ]
 
 [[package]]
 name = "aranya-idam-ffi"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
  "postcard",
+ "thiserror",
  "tracing",
 ]
 
 [[package]]
 name = "aranya-perspective-ffi"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -234,17 +246,18 @@ dependencies = [
 [[package]]
 name = "aranya-policy-ast"
 version = "0.1.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "bytecheck",
  "rkyv",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-policy-compiler"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-policy-ast",
  "aranya-policy-lang",
@@ -252,12 +265,13 @@ dependencies = [
  "buggy",
  "ciborium",
  "clap",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-policy-derive"
 version = "0.2.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-policy-lang",
  "prettyplease",
@@ -267,9 +281,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "aranya-policy-ifgen"
+version = "0.3.1"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+dependencies = [
+ "aranya-policy-ifgen-macro",
+ "aranya-policy-vm",
+ "aranya-runtime",
+ "thiserror",
+]
+
+[[package]]
+name = "aranya-policy-ifgen-build"
+version = "0.1.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+dependencies = [
+ "anyhow",
+ "aranya-policy-ast",
+ "aranya-policy-lang",
+ "prettyplease",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
+name = "aranya-policy-ifgen-macro"
+version = "0.2.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.100",
+]
+
+[[package]]
 name = "aranya-policy-lang"
 version = "0.1.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "anyhow",
  "aranya-policy-ast",
@@ -285,19 +334,20 @@ dependencies = [
 [[package]]
 name = "aranya-policy-module"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
  "bytecheck",
  "rkyv",
  "serde",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-policy-vm"
 version = "0.3.1"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
@@ -306,12 +356,13 @@ dependencies = [
  "buggy",
  "heapless 0.8.0",
  "postcard",
+ "thiserror",
 ]
 
 [[package]]
 name = "aranya-runtime"
 version = "0.3.0"
-source = "git+https://github.com/rfraser-spideroak/aranya-core#5defef823afabf33c5eb1081384a4a4ff6907f83"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -1273,6 +1324,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "esp-partition-table"
+version = "0.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ec3727380d79e53be45af5fd35c4b89267367db16fc95a11bbec5048572db798"
+dependencies = [
+ "embedded-storage",
+ "heapless 0.8.0",
+ "md5",
+]
+
+[[package]]
 name = "esp-println"
 version = "0.13.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1293,6 +1355,17 @@ dependencies = [
  "document-features",
  "riscv",
  "riscv-rt-macros",
+]
+
+[[package]]
+name = "esp-storage"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1e98b5069bd1482fb85f9236f8ea6cd1b5b6b5a1c3c3fb8c938c97ccfbbb051b"
+dependencies = [
+ "critical-section",
+ "embedded-storage",
+ "esp-build",
 ]
 
 [[package]]
@@ -1692,6 +1765,12 @@ checksum = "21e27d6220ce21f80ce5c4201f23a37c6f1ad037c72c9d1ff215c2919605a5d6"
 dependencies = [
  "unicode-id",
 ]
+
+[[package]]
+name = "md5"
+version = "0.7.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "490cc448043f947bae3cbee9c203358d62dbee0db12107a74be5c30ccfd09771"
 
 [[package]]
 name = "memchr"

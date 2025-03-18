@@ -1,3 +1,5 @@
+#![cfg(feature = "storage-sd")]
+
 use embedded_sdmmc::{TimeSource, Timestamp};
 use esp_hal::timer::Timer;
 

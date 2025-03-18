@@ -1,3 +1,5 @@
+#![cfg(feature = "storage-sd")]
+
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
 
@@ -11,7 +13,7 @@ use postcard::{from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 
-use crate::VolumeMan;
+use super::VolumeMan;
 
 /*
 Details of Implementation

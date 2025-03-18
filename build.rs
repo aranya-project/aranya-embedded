@@ -4,7 +4,6 @@ use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
 use aranya_policy_vm::Module;
 use rkyv::rancor::Error;
 use ron::de::from_str;
-use serde::Deserialize;
 use std::env;
 use std::fs::{self, File};
 use std::io::Write;
@@ -60,14 +59,11 @@ pub const WIFI_PASSWORD: &str = "{pass}";
     Ok(())
 }
 
+include!("src/aranya/envelope.rs");
+
 fn aranya_setup() {
-    let ffi_schema: &[ModuleSchema<'static>] = &[
-        aranya_envelope_ffi::Ffi::SCHEMA,
-        aranya_crypto_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
-        aranya_device_ffi::FfiDevice::SCHEMA,
-        aranya_perspective_ffi::FfiPerspective::SCHEMA,
-        aranya_idam_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
-    ];
+    let ffi_schema: &[ModuleSchema<'static>] =
+        &[NullEnvelope::SCHEMA];
     // Parse policy
     let ast =
         parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");
@@ -99,4 +95,8 @@ fn aranya_setup() {
     // Verify deserialization ability
     let _: Module =
         rkyv::from_bytes::<Module, Error>(&serialized).expect("Failed to serialize Module");
+
+    // Generate interface
+    println!("cargo:rerun-if-changed=config/policy.md");
+    aranya_policy_ifgen_build::generate("config/policy.md", "src/aranya/policy.rs").unwrap();
 }
