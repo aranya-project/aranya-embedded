@@ -17,6 +17,7 @@ aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
 critical-section = "1.2.0"
 embassy-executor = { version = "0.7.0",  features = ["nightly"] }
+embassy-futures = "0.1"
 embassy-sync = "0.6"
 embassy-time = { version = "0.4.0",  features = ["generic-queue-8"] }
 embedded-hal = "1.0.0"
@@ -83,7 +84,9 @@ embedded-hal-bus = { version = "0.3.0", optional = true }
 embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs", optional = true }
 
 # Enabled by "net-irda" feature
-#esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
+crc = { version = "3.2", optional = true }
+esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
+raptorq = { version = "2", default-features = false, optional = true }
 
 [build-dependencies]
 ron = "0.8.1"
@@ -103,7 +106,7 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-sd", "net-wifi", "net-irda"]
+default = ["storage-sd", "net-irda"]
 
 storage-internal = [
     "dep:embedded-storage",
@@ -127,7 +130,11 @@ net-wifi = [
     "dep:smoltcp",
 ]
 
-net-irda = []
+net-irda = [
+    "dep:crc",
+    "dep:esp-irda-transceiver",
+    "dep:raptorq",
+]
 
 [profile.dev]
 # Rust debug is too slow.

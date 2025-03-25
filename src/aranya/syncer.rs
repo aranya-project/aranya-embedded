@@ -10,8 +10,12 @@ use aranya_runtime::{
     vm_action, ClientState, Engine, GraphId, PeerCache, Sink, StorageProvider, SyncRequester,
     VmEffect, VmPolicy, MAX_SYNC_MESSAGE_SIZE,
 };
+use embassy_time::Timer;
 
-use crate::aranya::error::Result;
+use crate::{
+    aranya::error::Result,
+    net::{Message, Network},
+};
 
 use super::daemon;
 
@@ -50,7 +54,8 @@ where
     EN: Engine<Policy = VmPolicy<CE>, Effect = VmEffect> + Send + 'static,
     SP: StorageProvider + Send + 'static,
     CE: aranya_crypto::Engine + Send + Sync + 'static,
-    N: crate::net::Network,
+    N: Network,
+    <N as Network>::Addr: Default,
 {
     /// Syncs with the peer.
     /// Aranya client sends a `SyncRequest` to peer then processes the `SyncResponse`.
@@ -72,11 +77,12 @@ where
         };
         log::debug!("sync poll finished, len {len}");
         send_buf.truncate(len);
-        let tx_id = self.network.send_request(peer_addr, send_buf).await?;
-        let response = self.network.recv_response(tx_id).await?;
+        let m = Message::new_to(peer_addr, send_buf);
+        self.network.send_message(m).await?;
+        let response = self.network.recv_message().await?;
 
         // process the sync response.
-        let resp = postcard::from_bytes(&response)?;
+        let resp = postcard::from_bytes(&response.contents)?;
         let data = match resp {
             SyncResponse::Ok(data) => data,
             SyncResponse::Err(msg) => panic!("sync error: {msg}"),
@@ -109,14 +115,12 @@ where
     /// Wait forever for requests and handle them. This does not return.
     pub async fn serve(&self) -> ! {
         loop {
-            let (tx_id, data) = match self.network.accept().await {
+            let msg = match self.network.recv_message().await {
                 Ok(x) => x,
                 Err(e) => {
                     log::error!("{e}");
                     continue;
-                }
-
-                // TODO(chip): process sync request
+                } // TODO(chip): process sync request
             };
         }
     }
@@ -124,12 +128,42 @@ where
 
 #[cfg(feature = "net-wifi")]
 #[embassy_executor::task]
-pub async fn sync_wifi(client: Arc<Mutex<daemon::Client>>, network: crate::net::wifi::WifiNetwork<'static>) {
+pub async fn sync_wifi(
+    client: Arc<Mutex<daemon::Client>>,
+    network: crate::net::wifi::WifiNetwork<'static>,
+) {
     log::info!("WiFi syncer does nothing, lol");
 }
 
 #[cfg(feature = "net-irda")]
 #[embassy_executor::task]
-pub async fn sync_irda(client: Arc<Mutex<daemon::Client>>, network: crate::net::irda::IrdaNetwork) {
-    log::info!("IrDA syncer does nothing, lol");
+pub async fn sync_irda(
+    client: Arc<Mutex<daemon::Client>>,
+    network: crate::net::irda::IrNetworkInterface<'static>,
+) {
+    log::info!("IrDA syncer started");
+
+    let send_fut = async {
+        loop {
+            let msg = Message::new_to(0, Vec::from(b"hello"));
+            network
+                .send_message(msg)
+                .await
+                .inspect_err(|e| log::error!("send_error: {e}"))
+                .ok();
+            Timer::after_secs(1).await;
+        }
+    };
+
+    let recv_fut = async {
+        loop {
+            let r = network.recv_message().await;
+            match r {
+                Ok(msg) => log::info!("{:?}", msg),
+                Err(e) => log::error!("recv error: {e}"),
+            }
+        }
+    };
+
+    embassy_futures::join::join(send_fut, recv_fut).await;
 }
