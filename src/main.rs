@@ -4,283 +4,92 @@
 
 extern crate alloc;
 
-mod aranya;
+pub mod aranya;
 mod built;
 mod hardware;
-mod heap;
-mod tasks;
-mod tcp;
+mod net;
+mod storage;
+mod util;
 
-use alloc::format;
-use aranya::graph_store::GraphManager;
-use aranya::sink::VecSink;
-use aranya_crypto::default::DefaultEngine;
-use aranya_crypto::Rng;
-use aranya_runtime::linear::LinearStorageProvider;
-use aranya_runtime::{ClientState, GraphId, PeerCache};
-use core::str::FromStr;
+use aranya::daemon::Daemon;
 use embassy_executor::Spawner;
-use embassy_net::tcp::TcpSocket;
-use embassy_net::{IpListenEndpoint, Ipv4Address, Stack, StackResources};
-use embassy_net::{Ipv4Cidr, StaticConfigV4};
-use embassy_time::{Duration, Timer};
-use embedded_hal_bus::spi::ExclusiveDevice;
-use embedded_sdmmc::{
-    Directory, RawDirectory, RawVolume, SdCard, Timestamp, VolumeIdx, VolumeManager,
-};
 use esp_backtrace as _;
-use esp_hal::delay::Delay;
-use esp_hal::gpio::{Io, Level, Output};
-use esp_hal::peripheral::Peripheral;
-use esp_hal::peripherals::TIMG1;
-use esp_hal::spi::master::{Config, Spi};
-use esp_hal::spi::SpiMode;
-use esp_hal::timer::timg::TimerX;
-use esp_hal::{prelude::*, timer::timg::TimerGroup};
-use esp_println::println;
-use esp_wifi::wifi::{WifiApDevice, WifiDevice};
-use esp_wifi::EspWifiController;
-use hardware::esp32_engine::ESP32Engine;
-use hardware::esp32_time::Esp32TimeSource;
-use heap::init_heap;
+use esp_hal::clock::CpuClock;
+use esp_hal::timer::timg::TimerGroup;
+use esp_hal_embassy::main;
 use log::info;
-use owo_colors::OwoColorize;
-use tasks::router_host::{connection, net_task, run_dhcp};
-use tcp::sync::TcpSyncHandler;
-
-// ! Panics will result in lockout if early enough so try to convert to using results that don't panic
-
-pub type Client = ClientState<
-    ESP32Engine<DefaultEngine>,
-    LinearStorageProvider<
-        GraphManager<
-            ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>,
-            Delay,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
-    >,
->;
-
-// When you are okay with using a nightly compiler it's better to use https://docs.rs/static_cell/2.1.0/static_cell/macro.make_static.html
-macro_rules! mk_static {
-    ($t:ty,$val:expr) => {{
-        static STATIC_CELL: static_cell::StaticCell<$t> = static_cell::StaticCell::new();
-        #[deny(unused_attributes)]
-        let x = STATIC_CELL.uninit().write(($val));
-        x
-    }};
-}
 
 #[main]
 async fn main(spawner: Spawner) {
-    init_heap();
-
     // Initialize peripherals
-    let peripherals = esp_hal::init({
-        let mut config = esp_hal::Config::default();
-        config.cpu_clock = CpuClock::max();
-        config
-    });
+    let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
 
-    esp_println::logger::init_logger_from_env();
-
-    // Initialize embassy timer from timer 0 in timer group 1
+    // Initialize embassy timer groups
+    let timer_g0 = TimerGroup::new(peripherals.TIMG0);
     let timer_g1 = TimerGroup::new(peripherals.TIMG1);
     esp_hal_embassy::init(timer_g1.timer0);
 
+    // Initialize heaps
+    esp_alloc::heap_allocator!(64 * 1024);
+    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
+
+    esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
-    // Initialize wifi control timer from timer 0 in timer group 0
-    let timer_g0 = TimerGroup::new(peripherals.TIMG0);
-    let wifi_cont = mk_static!(
-        EspWifiController<'static>,
-        esp_wifi::init(
-            timer_g0.timer0,
-            esp_hal::rng::Rng::new(peripherals.RNG),
-            peripherals.RADIO_CLK,
-        )
-        .expect("Failed to initialize wifi controller")
-    );
+    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
 
-    // SD Card Timer Tracking Initialization
-    println!("SD Card Timer intialization");
-    // ! Add live update from server for timer tracking
-    let start_time = Timestamp {
-        year_since_1970: 54,
-        zero_indexed_month: 7,
-        zero_indexed_day: 14,
-        hours: 12,
-        minutes: 0,
-        seconds: 0,
-    };
-    let esp_timer_source = Esp32TimeSource::new(timer_g1.timer1, start_time);
+    #[cfg(feature = "storage-internal")]
+    let storage_provider = storage::internal::init().expect("couldn't get storage");
 
-    // SD Card SPI Interface Setting
-    println!("SD Card SPI Interface intialization");
-    let _io: Io = Io::new(peripherals.IO_MUX);
-    let sclk = peripherals.GPIO14;
-    let miso = peripherals.GPIO2;
-    let mosi = peripherals.GPIO15;
-    let cs = Output::new(peripherals.GPIO13, Level::High);
-    let spi = Spi::new_with_config(
+    #[cfg(feature = "storage-sd")]
+    let storage_provider = storage::sd::init(
         peripherals.SPI2,
-        Config {
-            frequency: 100u32.kHz(),
-            mode: SpiMode::Mode0,
-            ..Default::default()
-        },
-    );
-    let spi = spi.with_sck(sclk).with_mosi(mosi).with_miso(miso);
+        peripherals.GPIO36,
+        peripherals.GPIO35,
+        peripherals.GPIO37,
+        peripherals.GPIO11,
+        timer_g0.timer0,
+    )
+    .await
+    .expect("couldn't get storage");
 
-    // SD Card Initialization
-    println!("SD Card intialization");
-    let delay = Delay::new();
-    let ex_device =
-        ExclusiveDevice::new(spi, cs, delay).expect("Failed to set Exclusive SPI device");
-    // ExclusiveDevice implements SpiDevice traits needed for SdCard
-    let sd_card = SdCard::new(ex_device, delay);
-    println!(
-        "{}",
-        format!("Card Type is {:?}", sd_card.get_card_type()).blue()
-    );
-    // SD Card can take some time to initialize. This can cause a permanent loop if there is an error
-    while sd_card.get_card_type().is_none() {
-        println!(
-            "{}",
-            format!("Card Type is {:?}", sd_card.get_card_type()).blue()
-        );
-    }
-
-    let volume_manager = mk_static!(
-        VolumeManager<
-            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-        >,
-        VolumeManager::new(sd_card, esp_timer_source)
-    );
-    let raw_volume: RawVolume = volume_manager
-        .open_raw_volume(VolumeIdx(0))
-        .expect("Failed to get volume");
-
-    let raw_root_directory: RawDirectory = volume_manager
-        .open_root_dir(raw_volume)
-        .expect("Failed to open root directory");
-
-    let root_directory = mk_static!(
-        Directory<
-            '_,
-            SdCard<ExclusiveDevice<Spi<'_, esp_hal::Blocking>, Output<'_>, Delay>, Delay>,
-            Esp32TimeSource<TimerX<<TIMG1 as Peripheral>::P, 1>>,
-            4,
-            4,
-            1,
-        >,
-        raw_root_directory.to_directory(volume_manager)
-    );
-
-    // todo collect correct graphID
-    let manager = GraphManager::new(root_directory, GraphId::random(&mut Rng));
-
-    let policy = ESP32Engine::<DefaultEngine>::new();
-    let client = ClientState::new(policy, LinearStorageProvider::new(manager));
-
-    // Aranya Graph, Manager, and State Initialization
-    // This default graph ID is not used for anything beyond initializing the SDIo manager. The real graph_id is set later by `new_graph` as each ID corresponds to a policy with a given action
-    // Create New Graph With the Specified Effect Sink
-
-    // Wifi peripheral and implementation initialization
-    let wifi = peripherals.WIFI;
-    let (wifi_interface, controller) =
-        esp_wifi::wifi::new_with_mode(wifi_cont, wifi, WifiApDevice).unwrap();
-
-    // Server IP set
-    let gw_ip_addr_str = "192.168.2.1";
-    let gw_ip_addr = Ipv4Address::from_str(gw_ip_addr_str).expect("failed to parse gateway ip");
-
-    // Main configuration for the wifi stack in how it should set up internal and external IPs.
-    let config = embassy_net::Config::ipv4_static(StaticConfigV4 {
-        address: Ipv4Cidr::new(gw_ip_addr, 24), // Creates a subnet with mask /24 (255.255.255.0)
-        gateway: Some(gw_ip_addr),              // Sets the gateway IP
-        dns_servers: Default::default(),        // No DNS servers configured
-    });
-
-    let seed = 1234; // Used for generating TCP/IP sequence numbers. //! Bad seed but acceptable for demonstration
-
-    // Init network stack hosted on ESP32
-    let stack = &*mk_static!(
-        Stack<WifiDevice<'_, WifiApDevice>>,
-        Stack::new(
-            wifi_interface,
-            config,
-            mk_static!(StackResources<16>, StackResources::<16>::new()),
-            seed
-        )
-    );
-
-    // Spawn collection of tasks that passively maintain the necessary aspects of the server which are:
-    // Starting device as an access point
-    spawner.spawn(connection(controller)).ok();
-    // Running the network stack for handling communication events
-    spawner.spawn(net_task(stack)).ok();
-    // Running DHCP for internal IP setting
-    spawner.spawn(run_dhcp(stack, gw_ip_addr_str)).ok();
-
-    // TCP receive and transmit buffer sizes. 1KB for each
-    let mut rx_buffer = [0; 1024];
-    let mut tx_buffer = [0; 1024];
-
-    loop {
-        if stack.is_link_up() {
-            break;
-        }
-        Timer::after(Duration::from_millis(500)).await;
-    }
-
-    while !stack.is_config_up() {
-        Timer::after(Duration::from_millis(100)).await
-    }
-    stack
-        .config_v4()
-        .inspect(|c| println!("ipv4 config: {c:?}"));
-
-    let mut socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-    let peer_cache = PeerCache::new();
-    //let effect_sink = VecSink::new();
-
-    println!("TCP server starting on port 8080");
-
-    println!("Waiting for connection...");
-
-    let _buf = [0u8; 1024];
-
-    match socket
-        .accept(IpListenEndpoint {
-            addr: None,
-            port: 8080,
-        })
+    let mut daemon = Daemon::init(storage_provider)
         .await
+        .expect("could not create daemon");
+    let graph_id = daemon.create_team().await.expect("could not create team");
+    log::info!("Created graph - {graph_id}");
+
+    #[cfg(feature = "net-wifi")]
     {
-        Ok(_) => {
-            println!("Client connected");
-            /*
-            let mut sync_handler =
-                TcpSyncHandler::new(socket, None, client, peer_cache, effect_sink);
-            sync_handler
-                .handle_connection()
-                .await
-                .expect("Failed to handle connection");
-            */
-        }
-        Err(e) => {
-            // todo properly encase in a loop so that repeated attempts can be made to set up and use TCP sockets
-            println!("Accept error: {:?}", e);
-            // Close the current socket connection
-            socket.close();
-            // Reset the socket by creating a new one
-            drop(socket);
-            socket = TcpSocket::new(stack, &mut rx_buffer, &mut tx_buffer);
-            // Add a small delay before retrying
-            Timer::after(Duration::from_millis(100)).await;
-        }
+        let network = net::wifi::start(
+            peripherals.WIFI,
+            peripherals.RADIO_CLK,
+            timer_g1.timer1,
+            rng,
+            spawner,
+        )
+        .await;
+        spawner
+            .spawn(aranya::syncer::sync_wifi(daemon.get_client(), network))
+            .expect("could not spawn WiFi syncer task");
+    }
+
+    #[cfg(feature = "net-irda")]
+    {
+        let network = net::irda::start().await;
+        spawner
+            .spawn(aranya::syncer::sync_irda(daemon.get_client(), network))
+            .expect("could not spawn IrDA syncer task");
+    }
+
+    spawner.spawn(heap_report()).ok();
+}
+
+#[embassy_executor::task]
+async fn heap_report() {
+    loop {
+        let stats = esp_alloc::HEAP.stats();
+        log::info!("{}", stats);
+        embassy_time::Timer::after_secs(10).await;
     }
 }

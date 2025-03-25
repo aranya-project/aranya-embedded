@@ -1,55 +1,20 @@
-use aranya_crypto;
-use aranya_crypto_ffi;
-use aranya_device_ffi;
-use aranya_envelope_ffi;
 use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
 use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
 use aranya_policy_vm::Module;
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
+use rkyv::rancor::Error;
 use ron::de::from_str;
-use serde::Deserialize;
 use std::env;
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::Path;
 
 #[derive(serde::Deserialize)]
-pub struct AccessPointConfiguration {
+pub struct BaseConfiguration {
+    /// The SSID of the Wi-Fi network.
     pub ssid: String,
-    pub ssid_hidden: bool,
-    pub channel: u8,
-    pub secondary_channel: Option<u8>,
-    pub protocols: Vec<Protocol>,
-    pub auth_method: AuthMethod,
+    /// The password for the Wi-Fi connection.
     pub password: String,
-    pub max_connections: u16,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub enum Protocol {
-    P802D11B,
-    P802D11BG,
-    #[default]
-    P802D11BGN,
-    P802D11BGNLR,
-    P802D11LR,
-    P802D11BGNAX,
-}
-
-#[derive(Debug, Default, Deserialize)]
-pub enum AuthMethod {
-    None,
-    WEP,
-    WPA,
-    #[default]
-    WPA2Personal,
-    WPAWPA2Personal,
-    WPA2Enterprise,
-    WPA3Personal,
-    WPA2WPA3Personal,
-    WAPIPersonal,
 }
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -62,7 +27,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Read and validate the configuration
     let config_str = fs::read_to_string(config_path)?;
-    let config: AccessPointConfiguration = from_str(&config_str)?;
+    let config: BaseConfiguration = from_str(&config_str)?;
 
     // Setup output path
     let out_dir = env::var_os("CARGO_MANIFEST_DIR").unwrap();
@@ -75,31 +40,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     // Write the configuration to file
     let content = format!(
-        r#"use core::str::FromStr;
-use esp_wifi::wifi::{{AccessPointConfiguration, AuthMethod, Protocol}};
-use heapless::String;
-
-pub fn wifi_config() -> AccessPointConfiguration {{
-    AccessPointConfiguration {{
-        ssid: String::<32>::from_str("{}").expect("SSID Error"),
-        ssid_hidden: {},
-        channel: {},
-        secondary_channel: {:?},
-        protocols: ({}).into(),
-        auth_method: AuthMethod::{:?},
-        password: String::<64>::from_str("{}").expect("Password Error"),
-        max_connections: {},
-    }}
-}}
+        r#"pub const WIFI_SSID: &str = "{ssid}";
+pub const WIFI_PASSWORD: &str = "{pass}";
 "#,
-        config.ssid,
-        config.ssid_hidden,
-        config.channel,
-        config.secondary_channel,
-        protocols_to_bitflag(&config.protocols),
-        config.auth_method,
-        config.password,
-        config.max_connections
+        ssid = config.ssid,
+        pass = config.password,
     );
 
     File::create(&dest_path)?.write_all(content.as_bytes())?;
@@ -114,26 +59,11 @@ pub fn wifi_config() -> AccessPointConfiguration {{
     Ok(())
 }
 
-fn protocols_to_bitflag(protocols: &[Protocol]) -> String {
-    if protocols.is_empty() {
-        return "Protocol::P802D11BGN".to_string();
-    }
-
-    protocols
-        .iter()
-        .map(|p| format!("Protocol::{:?}", p))
-        .collect::<Vec<_>>()
-        .join(" | ")
-}
+include!("src/aranya/envelope.rs");
 
 fn aranya_setup() {
-    let ffi_schema: &[ModuleSchema<'static>] = &[
-        aranya_envelope_ffi::Ffi::SCHEMA,
-        aranya_crypto_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
-        aranya_device_ffi::FfiDevice::SCHEMA,
-        aranya_idam_ffi::Ffi::<aranya_crypto::keystore::memstore::MemStore>::SCHEMA,
-        aranya_perspective_ffi::FfiPerspective::SCHEMA,
-    ];
+    let ffi_schema: &[ModuleSchema<'static>] =
+        &[NullEnvelope::SCHEMA];
     // Parse policy
     let ast =
         parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");
@@ -146,8 +76,7 @@ fn aranya_setup() {
 
     // Serialize module
     // ! Find out why postcard fails
-    let mut serialized = Vec::new();
-    into_writer(&module, &mut serialized).expect("Failed to serialize Module");
+    let serialized = rkyv::to_bytes::<Error>(&module).expect("Failed to serialize Module");
 
     // Write to src/policy.rs
     let out_dir = env::var("CARGO_MANIFEST_DIR").unwrap();
@@ -165,5 +94,9 @@ fn aranya_setup() {
 
     // Verify deserialization ability
     let _: Module =
-        from_reader(&serialized[..]).expect("Failed to deserialize Module in build script");
+        rkyv::from_bytes::<Module, Error>(&serialized).expect("Failed to serialize Module");
+
+    // Generate interface
+    println!("cargo:rerun-if-changed=config/policy.md");
+    aranya_policy_ifgen_build::generate("config/policy.md", "src/aranya/policy.rs").unwrap();
 }

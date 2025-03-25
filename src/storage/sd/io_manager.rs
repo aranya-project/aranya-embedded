@@ -1,21 +1,19 @@
+#![cfg(feature = "storage-sd")]
+
 use alloc::rc::Rc;
 use alloc::string::{String, ToString};
+
 use alloc::vec::Vec;
 use alloc::{format, vec};
-use aranya_crypto::default;
 use aranya_runtime::{linear, GraphId, Location, StorageError};
-use ciborium::de::from_reader;
-use ciborium::ser::into_writer;
-use embedded_hal::delay::DelayNs;
-use embedded_hal::spi::SpiDevice;
-use embedded_sdmmc::{
-    BlockDevice, Directory, File, Mode, RawFile, SdCard, TimeSource, VolumeIdx, VolumeManager,
-};
+use embedded_sdmmc::{Mode, RawFile, VolumeIdx};
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_allocvec};
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+
+use super::VolumeMan;
 
 /*
 Details of Implementation
@@ -30,79 +28,53 @@ The head binary is the head location
 The location binary represents a vector which iterates through every command in data with the corresponding location for the bytes offset of each command, so that we know the boundaries for deserialization
 */
 
-// Single threaded implementation therefore we only need Rc and RefCell, not Arc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
+// Single threaded implementation therefore we only need Rc and RefCell, not Rc and Mutex as race conditions are not a concern. We are using Rc<RefCell<_>> as managing memory by passing the peripherals is difficult while fulfilling trait implementations and we want shared ownership of one peripheral. (It's likely that one can have a cleaner implementation but this is good enough)
 // ! todo remove redundant Rc<>
-pub struct GraphManager<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    directory: &'static Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-    pub graph_id: GraphId,
+// ! Todo, remove truncate so it doesn't reset
+pub struct GraphManager {
+    vol: Rc<VolumeMan>,
 }
 
-impl<SPI, DELAY, TS> GraphManager<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    pub fn new(
-        directory: &'static Directory<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        graph_id: GraphId,
-    ) -> Self {
-        println!("{}", "New SD Card Graph IO Manager".green());
-        GraphManager {
-            directory,
-            graph_id,
-        }
+impl GraphManager {
+    /// Creates a `FileManager` at `dir`.
+    pub fn new(volume_mgr: Rc<VolumeMan>) -> Result<Self, StorageError> {
+        Ok(Self { vol: volume_mgr })
     }
 }
 
-pub struct GraphWriter<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
+pub struct GraphWriter {
+    vol: Rc<VolumeMan>,
     /// Deserialize locations are used as usize markers for where deserialize start and end points should be on the graph data file
-    location_file: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    location_file: Rc<RawFile>,
     /// Raw binary data of the graph
-    data_file: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+    data_file: Rc<RawFile>,
     /// Current head location
-    head_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
+    head_file: RawFile,
 }
 
-impl<SPI, DELAY, TS> GraphWriter<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    pub fn new<'dir>(
-        location_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        data_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-        head_file: File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>,
-    ) -> GraphWriter<SPI, DELAY, TS> {
-        GraphWriter {
-            location_file: Rc::new(location_file),
-            data_file: Rc::new(data_file),
+impl GraphWriter {
+    /// Creates a `FileManager` at `dir`.
+    pub fn new(
+        volume_mgr: Rc<VolumeMan>,
+        location_file: Rc<RawFile>,
+        data_file: Rc<RawFile>,
+        head_file: RawFile,
+    ) -> Self {
+        Self {
+            vol: volume_mgr,
+            location_file,
+            data_file,
             head_file,
         }
     }
 }
 
-impl<SPI, DELAY, TS> linear::io::Write for GraphWriter<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    type ReadOnly = GraphReader<SPI, DELAY, TS>;
+impl linear::io::Write for GraphWriter {
+    type ReadOnly = GraphReader;
 
     fn readonly(&self) -> Self::ReadOnly {
         GraphReader {
+            vol: self.vol.clone(),
             deserialize_locations_file_handle: self.location_file.clone(),
             graph_data_file_handle: self.data_file.clone(),
         }
@@ -112,9 +84,13 @@ where
         println!("{}", "Head Access".green());
 
         let mut serialize_vec: Vec<u8> = Vec::new();
-        while !self.head_file.is_eof() {
+        while !self
+            .vol
+            .file_eof(self.head_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
-            let characters_parsed = self.head_file.read(&mut buffer).map_err(|e| {
+            let characters_parsed = self.vol.read(self.head_file, &mut buffer).map_err(|e| {
                 println!(
                     "Failed to Read Characters Into a Buffer: {:?}",
                     format!("{:?}", e).red()
@@ -150,7 +126,10 @@ where
         T: Serialize,
     {
         println!("{}", "Append Data".green());
-        let data_file_length = self.data_file.length();
+        let data_file_length = self
+            .vol
+            .file_length(*self.data_file)
+            .map_err(|_| StorageError::IoError)?;
         println!(
             "{}",
             format!("Bytes of Data Binary: {}", data_file_length).blue()
@@ -160,16 +139,15 @@ where
             "{}",
             "Built Data from Builder using End of Data File".green()
         );
-        let mut serialized_data = Vec::new();
-        into_writer(&data, &mut serialized_data).map_err(|e| {
+        let serialized_data = to_allocvec(&data).map_err(|e| {
             println!("Failed to Serialize Module: {:?}", format!("{:?}", e).red());
             StorageError::IoError
         })?;
         if serialized_data.is_empty() {
             panic!("Serialized Data to Append Cannot be Empty")
         }
-        self.data_file
-            .write(&serialized_data)
+        self.vol
+            .write(*self.data_file, &serialized_data)
             .map_err(|_| StorageError::IoError)?;
         println!(
             "{}",
@@ -179,11 +157,15 @@ where
         println!("{}", "Location Management".green());
 
         let mut serialized_location = Vec::new();
-        while !self.location_file.is_eof() {
+        while !self
+            .vol
+            .file_eof(*self.location_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
-                .location_file
-                .read(&mut buffer)
+                .vol
+                .read(*self.location_file, &mut buffer)
                 .map_err(|_| StorageError::IoError)?;
             serialized_location.extend_from_slice(&buffer[..characters_parsed]);
         }
@@ -219,21 +201,25 @@ where
             );
             StorageError::IoError
         })?;
-        self.location_file.seek_from_start(0).map_err(|e| {
-            println!(
-                "Failed to set Cursor to Offset {} Bytes From the Start of File: {:?}",
-                0,
-                format!("{:?}", e).red()
-            );
-            StorageError::IoError
-        })?;
-        self.location_file.write(&serialized).map_err(|e| {
-            println!(
-                "Failed to set Write to File: {:?}",
-                format!("{:?}", format!("{:?}", e).red())
-            );
-            StorageError::IoError
-        })?;
+        self.vol
+            .file_seek_from_start(*self.location_file, 0)
+            .map_err(|e| {
+                println!(
+                    "Failed to set Cursor to Offset {} Bytes From the Start of File: {:?}",
+                    0,
+                    format!("{:?}", e).red()
+                );
+                StorageError::IoError
+            })?;
+        self.vol
+            .write(*self.location_file, &serialized)
+            .map_err(|e| {
+                println!(
+                    "Failed to set Write to File: {:?}",
+                    format!("{:?}", format!("{:?}", e).red())
+                );
+                StorageError::IoError
+            })?;
         println!(
             "{}",
             format!(
@@ -250,11 +236,15 @@ where
         println!("{}", format!("Commit Head Details: {}", head).blue());
         println!("{}", "Head Management".green());
         let mut serialized = Vec::new();
-        while !self.head_file.is_eof() {
+        while !self
+            .vol
+            .file_eof(self.head_file)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
-                .head_file
-                .read(&mut buffer)
+                .vol
+                .read(self.head_file, &mut buffer)
                 .map_err(|_| StorageError::IoError)?;
             serialized.extend_from_slice(&buffer[..characters_parsed]);
         }
@@ -279,15 +269,17 @@ where
             println!("Failed to Serialize Module: {:?}", format!("{:?}", e).red());
             StorageError::IoError
         })?;
-        self.head_file.seek_from_start(0).map_err(|e| {
-            println!(
-                "Failed to set cursor to offset {} bytes from the start of file: {:?}",
-                0,
-                format!("{:?}", e).red()
-            );
-            StorageError::IoError
-        })?;
-        self.head_file.write(&serialized).map_err(|e| {
+        self.vol
+            .file_seek_from_start(self.head_file, 0)
+            .map_err(|e| {
+                println!(
+                    "Failed to set cursor to offset {} bytes from the start of file: {:?}",
+                    0,
+                    format!("{:?}", e).red()
+                );
+                StorageError::IoError
+            })?;
+        self.vol.write(self.head_file, &serialized).map_err(|e| {
             println!(
                 "Failed to set write to file: {:?}",
                 format!("{:?}", format!("{:?}", e).red())
@@ -308,22 +300,14 @@ where
     }
 }
 
-pub struct GraphReader<SPI, DELAY, TS>
-where
-    SPI: SpiDevice + 'static,
-    DELAY: DelayNs + 'static,
-    TS: TimeSource + 'static,
-{
-    deserialize_locations_file_handle: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
-    graph_data_file_handle: Rc<File<'static, SdCard<SPI, DELAY>, TS, 4, 4, 1>>,
+#[derive(Clone)]
+pub struct GraphReader {
+    vol: Rc<VolumeMan>,
+    deserialize_locations_file_handle: Rc<RawFile>,
+    graph_data_file_handle: Rc<RawFile>,
 }
 
-impl<SPI, DELAY, TS> linear::io::Read for GraphReader<SPI, DELAY, TS>
-where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
-{
+impl linear::io::Read for GraphReader {
     fn fetch<T>(&self, offset: usize) -> Result<T, StorageError>
     where
         T: DeserializeOwned, // ! + Debug,
@@ -331,11 +315,15 @@ where
         println!("{}", format!("Fetch offset {}", offset).green());
 
         let mut serialize_vec: Vec<u8> = Vec::new();
-        while !self.deserialize_locations_file_handle.is_eof() {
+        while !self
+            .vol
+            .file_eof(*self.deserialize_locations_file_handle)
+            .map_err(|_| StorageError::IoError)?
+        {
             let mut buffer: [u8; 16] = [0; 16];
             let characters_parsed = self
-                .deserialize_locations_file_handle
-                .read(&mut buffer)
+                .vol
+                .read(*self.deserialize_locations_file_handle, &mut buffer)
                 .map_err(|_| StorageError::IoError)?;
             serialize_vec.extend_from_slice(&buffer[..characters_parsed]);
         }
@@ -390,8 +378,8 @@ where
         let mut serialize_vec: Vec<u8> = vec![0; offset_data_end - offset];
 
         let characters_parsed = self
-            .graph_data_file_handle
-            .read(&mut serialize_vec)
+            .vol
+            .read(*self.graph_data_file_handle, &mut serialize_vec)
             .map_err(|_| StorageError::IoError)?;
 
         if characters_parsed != offset_data_end - offset {
@@ -407,7 +395,7 @@ where
             )
             .blue()
         );
-        let deserialized_u: T = from_reader(&serialize_vec[..]).map_err(|e| {
+        let deserialized_u: T = from_bytes(&serialize_vec[..]).map_err(|e| {
             println!(
                 "Failed to Deserialize Module: {:?}",
                 format!("{:?}", e).red()
@@ -419,72 +407,55 @@ where
     }
 }
 
-impl<SPI, DELAY, TS> Clone for GraphReader<SPI, DELAY, TS>
-where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
-{
-    fn clone(&self) -> Self {
-        println!("{}", "Clone".green());
-        println!(
-            "{}",
-            format!(
-                "Current file handles:\n{:?}\n{:?}",
-                self.deserialize_locations_file_handle, self.graph_data_file_handle
-            )
-            .green()
-        );
-        GraphReader {
-            deserialize_locations_file_handle: self.deserialize_locations_file_handle.clone(),
-            graph_data_file_handle: self.graph_data_file_handle.clone(),
-        }
-    }
-}
-
-impl<SPI, DELAY, TS> linear::io::IoManager for GraphManager<SPI, DELAY, TS>
-where
-    SPI: SpiDevice,
-    DELAY: DelayNs,
-    TS: TimeSource,
-{
-    type Writer = GraphWriter<SPI, DELAY, TS>;
+impl linear::io::IoManager for GraphManager {
+    type Writer = GraphWriter;
 
     fn create(&mut self, id: GraphId) -> Result<Self::Writer, StorageError> {
         println!("{}", format!("Create GraphId: {:?}", id).green());
         println!("{}", "Create Files".green());
         // Check if file already exists by opening in ReadWriteCreate. Throw error if one does exist and create a file if it doesn't
         // Open all files using the same directory reference
+        let raw_vol = self
+            .vol
+            .open_raw_volume(VolumeIdx(0))
+            .map_err(|_| StorageError::IoError)?;
+        let raw_dir = self
+            .vol
+            .open_root_dir(raw_vol)
+            .map_err(|_| StorageError::IoError)?;
+
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
-        let data_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
-            .map_err(|e| {
-                println!(
-                    "Error Opening File {} in Root Directory: {:?}",
-                    file_name,
-                    format!("{:?}", e).red()
-                );
-                StorageError::NoSuchStorage
-            })?;
+        let data_file: Rc<RawFile> = Rc::new(
+            self.vol
+                .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteCreateOrTruncate)
+                .map_err(|e| {
+                    println!(
+                        "Error Opening File {} in Root Directory: {:?}",
+                        file_name,
+                        format!("{:?}", e).red()
+                    );
+                    StorageError::NoSuchStorage
+                })?,
+        );
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
-        let location_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
-            .map_err(|e| {
-                println!(
-                    "Error Opening File {} in Root Directory: {:?}",
-                    file_name,
-                    format!("{:?}", e).red()
-                );
-                StorageError::NoSuchStorage
-            })?;
+        let location_file: Rc<RawFile> = Rc::new(
+            self.vol
+                .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteCreateOrTruncate)
+                .map_err(|e| {
+                    println!(
+                        "Error Opening File {} in Root Directory: {:?}",
+                        file_name,
+                        format!("{:?}", e).red()
+                    );
+                    StorageError::NoSuchStorage
+                })?,
+        );
 
         let file_name = truncate_filename(format!("h_{}.b", id), 8);
-        let head_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadWriteCreate)
+        let head_file: RawFile = self
+            .vol
+            .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteCreateOrTruncate)
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -495,8 +466,12 @@ where
             })?;
 
         println!("{}", "Files Created".green());
-        self.graph_id = id;
-        Ok(GraphWriter::new(location_file, data_file, head_file))
+        Ok(GraphWriter::new(
+            self.vol.clone(),
+            location_file,
+            data_file,
+            head_file,
+        ))
     }
 
     // ! todo make this return Ok(None) if none exist instead of creating one and returning that
@@ -504,23 +479,47 @@ where
         println!("{}", format!("Open GraphId: {:?}", id).green());
         println!("{}", "Open Files".green());
         // Check if file exists by opening in ReadOnly mode. Return error if it doesn't
+        let raw_vol = self
+            .vol
+            .open_raw_volume(VolumeIdx(0))
+            .map_err(|_| StorageError::IoError)?;
+        let raw_dir = self
+            .vol
+            .open_root_dir(raw_vol)
+            .map_err(|_| StorageError::IoError)?;
+
         let file_name = truncate_filename(format!("d_{}.b", id), 8);
-        let data_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
-            .map_err(|e| {
-                println!(
-                    "Error Opening File {} in Root Directory: {:?}",
-                    file_name,
-                    format!("{:?}", e).red()
-                );
-                StorageError::NoSuchStorage
-            })?;
+        let data_file: Rc<RawFile> = Rc::new(
+            self.vol
+                .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteTruncate)
+                .map_err(|e| {
+                    println!(
+                        "Error Opening File {} in Root Directory: {:?}",
+                        file_name,
+                        format!("{:?}", e).red()
+                    );
+                    StorageError::NoSuchStorage
+                })?,
+        );
 
         let file_name = truncate_filename(format!("l_{}.b", id), 8);
-        let location_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
+        let location_file: Rc<RawFile> = Rc::new(
+            self.vol
+                .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteTruncate)
+                .map_err(|e| {
+                    println!(
+                        "Error Opening File {} in Root Directory: {:?}",
+                        file_name,
+                        format!("{:?}", e).red()
+                    );
+                    StorageError::NoSuchStorage
+                })?,
+        );
+
+        let file_name = truncate_filename(format!("h_{}.b", id), 8);
+        let head_file: RawFile = self
+            .vol
+            .open_file_in_dir(raw_dir, file_name.as_str(), Mode::ReadWriteTruncate)
             .map_err(|e| {
                 println!(
                     "Error Opening File {} in Root Directory: {:?}",
@@ -530,21 +529,13 @@ where
                 StorageError::NoSuchStorage
             })?;
 
-        let file_name = truncate_filename(format!("h_{}.b", id), 8);
-        let head_file = self
-            .directory
-            .open_file_in_dir(file_name.as_str(), Mode::ReadOnly)
-            .map_err(|e| {
-                println!(
-                    "Error Opening File {} in Root Directory: {:?}",
-                    file_name,
-                    format!("{:?}", e).red()
-                );
-                StorageError::NoSuchStorage
-            })?;
-        println!("{}", "Files Opened".green());
-        self.graph_id = id; // Update the graph_id to allow for opening different graphs
-        Ok(Some(GraphWriter::new(location_file, data_file, head_file)))
+        println!("{}", "Files Created".green());
+        Ok(Some(GraphWriter::new(
+            self.vol.clone(),
+            location_file,
+            data_file,
+            head_file,
+        )))
     }
 }
 
@@ -566,3 +557,5 @@ fn truncate_filename(name: String, max_base_length: usize) -> String {
         format!("{}.{}", truncated_base, extension)
     }
 }
+
+// ! Implement RawFile closing within VolumeManager Arc or Rc upon error in sync/droping of this struct as it would result in blocking RawFile handles
