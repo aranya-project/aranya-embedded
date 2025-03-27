@@ -10,7 +10,7 @@ use thiserror::Error;
 /// NetworkError is intentionally opaque as it may be produced by any
 /// [`Network`] implementation.
 #[derive(Debug, Error)]
-pub(crate) enum NetworkError {
+pub enum NetworkError {
     #[error("Send error: {0}")]
     Send(String),
     #[error("Receive error: {0}")]

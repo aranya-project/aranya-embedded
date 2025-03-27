@@ -106,7 +106,7 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-sd", "net-irda"]
+default = ["storage-internal", "net-irda"]
 
 storage-internal = [
     "dep:embedded-storage",

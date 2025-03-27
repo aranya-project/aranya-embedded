@@ -15,7 +15,7 @@ use esp_hal::{
     timer::timg,
 };
 use fugit::RateExtU32 as _;
-use io_manager::GraphManager;
+pub use io_manager::GraphManager;
 use owo_colors::OwoColorize;
 
 use crate::hardware::esp32_time::Esp32TimeSource;
