@@ -28,6 +28,8 @@ pub enum StorageError {
     BadHeader,
     #[error("serialization: {0}")]
     Serialization(#[from] rkyv::rancor::Error),
+    #[error("read")]
+    Read,
     #[error("write")]
     Write,
     #[error("Aranya error")]

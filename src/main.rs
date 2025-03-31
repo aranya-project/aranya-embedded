@@ -2,6 +2,7 @@
 #![no_main]
 #![feature(impl_trait_in_assoc_type)]
 #![feature(core_io_borrowed_buf)]
+#![feature(maybe_uninit_write_slice)]
 
 extern crate alloc;
 
@@ -60,6 +61,8 @@ async fn main(spawner: Spawner) {
         .expect("could not create daemon");
     let graph_id = daemon.create_team().await.expect("could not create team");
     log::info!("Created graph - {graph_id}");
+
+    daemon.set_led(graph_id, 0, 255, 255).await.expect("could not set LED");
 
     #[cfg(feature = "net-wifi")]
     {
