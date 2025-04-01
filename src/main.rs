@@ -39,6 +39,8 @@ async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
+    tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+
     let rng = esp_hal::rng::Rng::new(peripherals.RNG);
 
     #[cfg(feature = "storage-internal")]

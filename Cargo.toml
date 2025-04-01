@@ -48,6 +48,7 @@ rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "byt
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 static_cell = { version = "2.1.0", features = ["nightly"] }
 thiserror = { version = "2", default-features = false }
+tracing = { version = "0.1", default-features = false }
 
 # Dependencies enabled for "wifi"
 embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet" ], optional = true }

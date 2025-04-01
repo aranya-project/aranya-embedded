@@ -213,6 +213,7 @@ dependencies = [
  "smoltcp",
  "static_cell",
  "thiserror",
+ "tracing",
 ]
 
 [[package]]
