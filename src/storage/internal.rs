@@ -45,7 +45,7 @@ fn find_data_partition(flash: &mut FlashStorage) -> Result<PartitionEntry, Stora
     let mut data_partition = None;
 
     for p in (&mut entries).flatten() {
-        log::info!("{}: at {:X} size {:X}", p.name(), p.offset, p.size);
+        log::debug!("{}: at {:X} size {:X}", p.name(), p.offset, p.size);
         if matches!(p.type_, PartitionType::Data(DataPartitionType::Undefined)) && p.name == "graph"
         {
             data_partition = Some(p);
@@ -194,7 +194,6 @@ where
             return Err(AranyaStorageError::IoError);
         }
 
-        log::info!("rkyv");
         let header =
             rkyv::access::<ArchivedSegmentHeader, rancor::Error>(&segment_header[MAGIC_LEN..])
                 .map_err(log_error(AranyaStorageError::IoError))?;
@@ -203,8 +202,8 @@ where
             .try_into()
             .map_err(log_error(AranyaStorageError::IoError))?;
 
-        log::info!("Fetching segment @ {offset}, len {data_size}");
-        log::info!("  header bytes: {:?}", &segment_header);
+        log::debug!("Fetching segment @ {offset}, len {data_size}");
+        log::debug!("  header bytes: {:?}", &segment_header);
         let byte_buf = Box::new_uninit_slice(data_size);
         // SAFETY: uhhhhhhhhh
         let mut byte_buf = unsafe { byte_buf.assume_init() };
@@ -212,7 +211,7 @@ where
         self.storage
             .lock(|s| s.borrow_mut().read(read_pos, &mut byte_buf))
             .map_err(storage_error)?;
-        log::info!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
+        log::debug!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
         postcard::from_bytes(&byte_buf).map_err(log_error(AranyaStorageError::IoError))
     }
 }
@@ -305,7 +304,7 @@ where
         let item = builder(offset);
         let mut item_bytes =
             postcard::to_allocvec(&item).map_err(log_error(AranyaStorageError::IoError))?;
-        log::info!("Appending segment @ {offset}, len {}", item_bytes.len());
+        log::debug!("Appending segment @ {offset}, len {}", item_bytes.len());
         let item_size = SEGMENT_HEADER_MAGIC.len() + SEGMENT_HEADER_SIZE + item_bytes.len();
         if self.header_cache.stored_bytes + item_size > self.size {
             log::error!("Internal storage out of space");
@@ -319,8 +318,8 @@ where
             })
             .map_err(log_error(AranyaStorageError::IoError))?,
         );
-        log::info!("  header bytes: {:?}", &disk_bytes);
-        log::info!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
+        log::debug!("  header bytes: {:?}", &disk_bytes);
+        log::debug!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
 
         disk_bytes.append(&mut item_bytes);
         assert_eq!(disk_bytes.len(), item_size);
@@ -340,13 +339,14 @@ where
     }
 
     fn commit(&mut self, head: Location) -> Result<(), AranyaStorageError> {
+        log::debug!("commit {head}");
         self.update_header(|header| {
             let segment = head
                 .segment
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
             let command = head
-                .segment
+                .command
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
             header.head = Some((segment, command));
