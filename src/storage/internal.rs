@@ -1,10 +1,7 @@
 #![cfg(feature = "storage-internal")]
 
+use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::cell::RefCell;
-use core::mem::MaybeUninit;
-
-use alloc::boxed::Box;
-use alloc::sync::Arc;
 
 use aranya_crypto::Id;
 use aranya_runtime::linear::LinearStorageProvider;
@@ -96,14 +93,9 @@ fn write_header<S>(
 where
     S: embedded_storage::Storage,
 {
-    let mut buf = Box::new_uninit_slice(HEADER_MAGIC.len() + HEADER_SIZE);
-    MaybeUninit::copy_from_slice(&mut buf[0..HEADER_MAGIC.len()], &HEADER_MAGIC);
-    MaybeUninit::copy_from_slice(
-        &mut buf[HEADER_MAGIC.len()..],
-        &rkyv::to_bytes::<rancor::Error>(header)?,
-    );
-    // SAFETY: the entire buffer was written with the above `copy_from_slice()` calls.
-    let buf = unsafe { buf.assume_init() };
+    let mut buf = Vec::with_capacity(HEADER_MAGIC.len() + HEADER_SIZE);
+    buf.extend_from_slice(&HEADER_MAGIC);
+    buf.extend_from_slice(&rkyv::to_bytes::<rancor::Error>(header)?);
 
     storage
         .lock(|storage| storage.borrow_mut().write(offset, &buf))
@@ -206,7 +198,8 @@ where
         log::debug!("Fetching segment @ {offset}, len {data_size}");
         log::debug!("  header bytes: {:?}", &segment_header);
         let byte_buf = Box::new_uninit_slice(data_size);
-        // SAFETY: uhhhhhhhhh
+        // SAFETY: This should be valid, as the underlying representation of a `u8` is just a byte
+        // of memory. That underlying byte can't exceed the range of a `u8` by definition.
         let mut byte_buf = unsafe { byte_buf.assume_init() };
         let read_pos = read_pos + (MAGIC_LEN + SEGMENT_HEADER_SIZE) as u32;
         self.storage
@@ -235,8 +228,9 @@ where
         storage: Arc<Mutex<CriticalSectionRawMutex, RefCell<S>>>,
         base: u32,
         size: usize,
-    ) -> Writer<S> {
-        let header = fetch_header(&storage, base).expect("could not fetch header");
+    ) -> Result<Writer<S>, AranyaStorageError> {
+        let header =
+            fetch_header(&storage, base).map_err(log_error(AranyaStorageError::IoError))?;
         Self::new_with_header(storage, base, size, header)
     }
 
@@ -245,13 +239,13 @@ where
         base: u32,
         size: usize,
         header: EspStorageHeader,
-    ) -> Writer<S> {
-        Writer {
+    ) -> Result<Writer<S>, AranyaStorageError> {
+        Ok(Writer {
             base,
             size,
             header_cache: header,
             storage,
-        }
+        })
     }
 
     fn update_header<F>(&mut self, update: F) -> Result<(), StorageError>
@@ -315,6 +309,8 @@ where
         let mut disk_bytes = SEGMENT_HEADER_MAGIC.to_vec();
         disk_bytes.extend_from_slice(
             &rkyv::to_bytes::<rancor::Error>(&SegmentHeader {
+                // This should never panic as it is exceedingly unlikely that the segment size
+                // won't fit in a `u32`.
                 size: item_bytes.len().try_into().unwrap(),
             })
             .map_err(log_error(AranyaStorageError::IoError))?,
@@ -421,7 +417,7 @@ where
         if header.graph_id.is_some() {
             return Err(AranyaStorageError::StorageExists);
         }
-        let mut writer = Writer::new(Arc::clone(&self.storage), self.base, self.size);
+        let mut writer = Writer::new(Arc::clone(&self.storage), self.base, self.size)?;
         writer
             .update_header(|h| {
                 h.graph_id = Some(id.into());
@@ -448,6 +444,6 @@ where
             self.base,
             self.size,
             header,
-        )))
+        )?))
     }
 }
