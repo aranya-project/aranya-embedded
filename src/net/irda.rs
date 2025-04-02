@@ -90,7 +90,7 @@ pub struct IrPacket {
     /// same `message_seq`.
     pub message_seq: u8,
     // `chunk_len` is never read but the field exists for documentary purposes and because it
-    // will be used in the likely event we refactor to postcard 2.0.
+    // will be used in the likely event we refactor to bincode 2.0.
     #[allow(dead_code)]
     /// Length of the `contents`` in this packet.
     pub chunk_len: u16,
