@@ -117,9 +117,10 @@ pub fn init() -> Result<LinearStorageProvider<EspPartitionIoManager<FlashStorage
     let mut storage = FlashStorage::new();
     let data_partition = find_data_partition(&mut storage)?;
 
-    // for testing
+    // hack for testing. 0x180000 is the start of our data partition, and this zeroes the header so that
+    // it recreates the internal linear storage.
     storage
-        .write(0x181000, &[0u8; 0x1000])
+        .write(0x180000, &[0u8; 0x1000])
         .expect("could not erase flash");
 
     Ok(LinearStorageProvider::new(EspPartitionIoManager::new(

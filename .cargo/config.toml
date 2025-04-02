@@ -1,5 +1,5 @@
 [target.xtensa-esp32s3-none-elf]
-runner = "espflash flash --monitor --partition-table partitions.csv --partition-table-offset 32768"
+runner = "espflash flash --monitor --partition-table partitions.csv"
 
 [env]
 ESP_LOG="INFO"
