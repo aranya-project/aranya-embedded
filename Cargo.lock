@@ -1333,6 +1333,7 @@ dependencies = [
 [[package]]
 name = "esp-irda-transceiver"
 version = "0.2.0"
+source = "git+git+ssh://git@github.com/aranya-project/esp-irda-transceiver#1e5ab56dce37f35848b317c3ff1e8e394bac434a"
 dependencies = [
  "embedded-hal-async",
  "esp-hal",

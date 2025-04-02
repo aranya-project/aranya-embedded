@@ -85,7 +85,8 @@ embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sd
 
 # Enabled by "net-irda" feature
 crc = { version = "3.2", optional = true }
-esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
+# Dep is not yet public
+esp-irda-transceiver = { git = "git+ssh://git@github.com/aranya-project/esp-irda-transceiver", optional = true }
 raptorq = { version = "2", default-features = false, optional = true }
 
 [build-dependencies]
@@ -106,7 +107,7 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-internal", "net-irda"]
+default = ["storage-sd", "net-irda"]
 
 storage-internal = [
     "dep:embedded-storage",

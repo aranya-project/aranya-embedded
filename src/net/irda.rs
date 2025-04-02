@@ -1,4 +1,37 @@
 #![cfg(feature = "net-irda")]
+//! This implements a networking interface over IrDA hardware provided by `esp_irda_transceiver`.
+//! Calling [`start`] will give you a [`IrNetworkInterface`] instance that implements [`Network`].
+//!
+//! ## Theory of Operation
+//!
+//! A [`Message`]'s payload is split up into chunks with [`raptorq`], which adds redundancy to
+//! allow reconstruction from damaged packets. Then each chunk is packaged in an [`IrPacket`] and
+//! sent over the [`IrdaTransceiver`].
+//!
+//! On the receiving end, it reads the [`IrdaTransceiver`] until a valid packet header is found,
+//! then the packet is read and given to an [`IrMessageReconstructor`], which collects packets
+//! sent to this address until it can reconstruct the original [`Message`]. Once a packet is
+//! successfully reconstructed, it is returned to the caller.
+//!
+//! ## [`IrPacket`] on-wire format
+//!
+//! The packet is a header followed by the payload bytes. The header is 12 bytes and looks like
+//! this:
+//!
+//! ```
+//! |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7        |  8  |  9  | 10  | 11  |
+//! | magic           | recipient |  sender   | chunk_seq | chunk_len | total_len |
+//! | F0h | 0Fh | F0h |    u16    |    u16    |    u8     |    u16    |    u16    |
+//! ```
+//!
+//! The magic bytes are chosen to allow some dead time during transmission. If another device is
+//! transmitting at the same time, that transmission might corrupt these bytes, causing it to be
+//! ignored by receivers[^uart]. For more details on the rest of the packet, see the [`IrPacket`]
+//! documentation.
+//!
+//! [^uart]: Because of various historical quirks of UART transmission, IrDA SIR transmits a 0 bit
+//!          as a pulse and a 1 bit as no pulse. So a simultaneously transmitted 0 colliding with a
+//!          1 will cause the 1 to flip to a 0.
 
 use core::io::BorrowedBuf;
 use core::mem::MaybeUninit;
@@ -11,26 +44,35 @@ use esp_irda_transceiver::{IrdaTransceiver, UartError};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, Network, NetworkError};
+use crate::util::SliceCursor;
 
 type Mutex<T> =
     embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
 
-const CRC: Crc<u16> = Crc::<u16>::new(&crc::CRC_16_XMODEM);
+const CRC: Crc<u16> = Crc::<u16>::new(&crc::CRC_16_XMODEM); // XMODEM seems appropriate. :D
 const IR_MAGIC: [u8; 3] = [0xF0, 0x0F, 0xF0];
 const IR_CHUNK_SIZE: usize = 64; // needs to be less than 65536 because this will become the raptorq MTU which is u16
 const IR_HEADER_SIZE: usize = 9; // recipient, sender, chunk_seq, chunk_len, total_len
 const IR_CRC_SIZE: usize = (CRC.algorithm.width / 8) as usize;
-const IR_REPAIR_PACKETS: usize = 3;
+const IR_REPAIR_PACKETS: usize = 3; // chosen arbitrarily. Should probably be determined dynamically by message size.
 const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if there's a way to ask raptorq for this
 const IR_PACKET_SIZE: usize =
     IR_MAGIC.len() + IR_HEADER_SIZE + IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD;
-const RANDOM_MIN: u32 = 100; // This is the minimum time to wait between packets
-const RANDOM_SPREAD: u32 = 200; // This is distance between the minimum and maximum times to wait.
 
-// Magic/Header format
-// |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7        |  8  |  9  | 10  | 11  |
-// | magic           | recipient |  sender   | chunk_seq | chunk_len | total_len |
-// | F0h | 0Fh | F0h |    u16    |    u16    |    u8     |    u16    |    u16    |
+/// UART speed
+const UART_BAUD_RATE: u64 = 115200;
+/// How long it takes to transmit one byte (10 bit times) in microseconds
+// This really should divide and take the ceiling but all we want is an upper bound and the
+// integer math is less troublesome in const context.
+const UART_BYTE_DELAY_US: u64 = 10 * (1_000_000 / UART_BAUD_RATE) + 1;
+
+/// The minimum time to wait between packets.
+const RANDOM_MIN: u32 = 100;
+/// The distance between the minimum and maximum times to wait. Time between packets is then
+/// unformly distributed between `RANDOM_MIN` and `RANDOM_MIN + RANDOM_SPREAD`.
+const RANDOM_SPREAD: u32 = 200;
+/// How long to wait to retry after a failed send.
+const SEND_RETRY_DELAY_MS: u64 = 50;
 
 #[derive(Debug, thiserror::Error)]
 pub enum IrError {
@@ -47,6 +89,9 @@ pub struct IrPacket {
     /// Identifier for this sequence of packets. All packets in the same message have the
     /// same `message_seq`.
     pub message_seq: u8,
+    // `chunk_len` is never read but the field exists for documentary purposes and because it
+    // will be used in the likely event we refactor to postcard 2.0.
+    #[allow(dead_code)]
     /// Length of the `contents`` in this packet.
     pub chunk_len: u16,
     /// Total length of the message encoded by these packets.
@@ -66,8 +111,8 @@ pub struct IrMessageReconstructor {
 
 impl IrMessageReconstructor {
     /// Create a new message reconstructor. The `initial_packet` argument is just used to
-    /// set up some decoder parameters. You should still call [`add_packet`] after creating
-    /// the reconstructor.
+    /// set up some decoder parameters. You should still call [`add_packet`](Self::add_packet)
+    /// after creating the reconstructor.
     pub fn new(initial_packet: &IrPacket) -> IrMessageReconstructor {
         IrMessageReconstructor {
             decoder: raptorq::Decoder::new(ObjectTransmissionInformation::with_defaults(
@@ -108,7 +153,7 @@ pub struct IrNetworkInterface<'a> {
 
 impl<'o> IrNetworkInterface<'o> {
     /// Create a new `IrNetworkInterface`.
-    pub fn new(mut irts: IrdaTransceiver<'o>, my_address: u16) -> IrNetworkInterface<'o> {
+    fn new(mut irts: IrdaTransceiver<'o>, my_address: u16) -> IrNetworkInterface<'o> {
         irts.enable(true);
         IrNetworkInterface {
             irts: Mutex::new(irts),
@@ -135,6 +180,8 @@ impl<'o> IrNetworkInterface<'o> {
             let mut bb = BorrowedBuf::from(&mut output_buf[..]);
             {
                 let mut bc = bb.unfilled();
+                // SAFETY: This shouldn't overflow as we should be writing at most `IR_PACKET_SIZE`
+                // bytes.
                 bc.append(&IR_MAGIC);
                 bc.append(&u16::to_be_bytes(recipient));
                 bc.append(&u16::to_be_bytes(self.my_address));
@@ -165,7 +212,7 @@ impl<'o> IrNetworkInterface<'o> {
             if r > 0 {
                 return Ok(byte_buf[0]);
             }
-            Timer::after_micros(100).await;
+            Timer::after_micros(UART_BYTE_DELAY_US).await;
         }
     }
 
@@ -186,22 +233,25 @@ impl<'o> IrNetworkInterface<'o> {
             let mut crc = CRC.digest();
             let mut irts = self.irts.lock().await;
             irts.read_all(&mut input_buf[0..IR_HEADER_SIZE]).await?;
-            crc.update(&input_buf[..IR_HEADER_SIZE]);
+            crc.update(&input_buf[0..IR_HEADER_SIZE]);
             let (sender, chunk_seq, chunk_len, total_len) = {
-                let recipient = u16::from_be_bytes(input_buf[0..2].try_into().unwrap());
+                let mut sc = SliceCursor::new(&input_buf[0..IR_HEADER_SIZE]);
+                let recipient = sc.next_u16_be();
                 if recipient != self.my_address {
                     log::info!("packet not for me; for {recipient}");
                     continue;
                 }
-                let sender = u16::from_be_bytes(input_buf[2..4].try_into().unwrap());
-                let chunk_seq = input_buf[4];
-                let chunk_len = u16::from_be_bytes(input_buf[5..7].try_into().unwrap()) as usize;
+                let sender = sc.next_u16_be();
+                let chunk_seq = sc.next_u8();
+                let chunk_len = sc.next_u16_be() as usize;
                 if chunk_len > IR_CHUNK_SIZE + RAPTORQ_OVERHEAD {
                     log::info!("malformed chunk of size {chunk_len}");
                     continue;
                 }
-                let total_len = u16::from_be_bytes(input_buf[7..9].try_into().unwrap());
+                let total_len = sc.next_u16_be();
                 log::info!("chunk len {chunk_len} seq {chunk_seq}");
+
+                assert_eq!(sc.remaining(), 0);
 
                 (sender, chunk_seq, chunk_len, total_len)
             };
@@ -259,7 +309,7 @@ impl Network for IrNetworkInterface<'_> {
             .await
             .map_err(|e| NetworkError::Send(alloc::format!("Send error: {e}")))?
         {
-            Timer::after_millis(50).await;
+            Timer::after_millis(SEND_RETRY_DELAY_MS).await;
         }
         Ok(())
     }
@@ -271,6 +321,7 @@ impl Network for IrNetworkInterface<'_> {
     }
 }
 
+/// Starts the IR networking interface and returns it.
 pub async fn start(irts: IrdaTransceiver<'_>, my_address: u16) -> IrNetworkInterface<'_> {
     IrNetworkInterface::new(irts, my_address)
 }
