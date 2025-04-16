@@ -43,6 +43,7 @@ getrandom = { version = "0.2.15", features = ["custom"]}
 heapless = { version = "0.8.0", default-features = false }
 log = { version = "0.4.21" }
 owo-colors = "4.1.0"
+parameter-store = { path = "./parameter-store", features = ["embedded"] }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }

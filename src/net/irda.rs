@@ -15,13 +15,13 @@
 //!
 //! ## [`IrPacket`] on-wire format
 //!
-//! The packet is a header followed by the payload bytes. The header is 12 bytes and looks like
-//! this:
+//! The packet is a header followed by the payload bytes and finally by a 16-bit CRC. The header
+//! is 12 bytes and looks like this:
 //!
 //! ```
-//! |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7        |  8  |  9  | 10  | 11  |
-//! | magic           | recipient |  sender   | chunk_seq | chunk_len | total_len |
-//! | F0h | 0Fh | F0h |    u16    |    u16    |    u8     |    u16    |    u16    |
+//! |  0  |  1  |  2  |  3  |  4  |  5  |  6  |  7          |  8  |  9  | 10  | 11  |
+//! | magic           | recipient |  sender   | message_seq | chunk_len | total_len |
+//! | F0h | 0Fh | F0h |    u16    |    u16    |      u8     |    u16    |    u16    |
 //! ```
 //!
 //! The magic bytes are chosen to allow some dead time during transmission. If another device is
@@ -39,15 +39,23 @@ use core::sync::atomic::{AtomicU8, Ordering};
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use crc::{self, Crc};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::Timer;
 use esp_irda_transceiver::{IrdaTransceiver, UartError};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
-use super::{Message, Network, NetworkError};
+use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
+use crate::mk_static;
 use crate::util::SliceCursor;
 
+const IR_PACKET_QUEUE_SIZE: usize = 2;
 type Mutex<T> =
     embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
+type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
+type Sender<'a, T> =
+    embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
+type Receiver<'a, T> =
+    embassy_sync::channel::Receiver<'a, CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
 
 const CRC: Crc<u16> = Crc::<u16>::new(&crc::CRC_16_XMODEM); // XMODEM seems appropriate. :D
 const IR_MAGIC: [u8; 3] = [0xF0, 0x0F, 0xF0];
@@ -142,25 +150,25 @@ impl IrMessageReconstructor {
     }
 }
 
-/// `IrNetworkInterface` manages turning a message into a series of packets and back again.
-pub struct IrNetworkInterface<'a> {
+/// `IrNetworkEngine` manages turning a message into a series of packets and back again.
+pub(crate) struct IrNetworkEngine<'a> {
     irts: Mutex<IrdaTransceiver<'a>>,
     my_address: u16,
-    message_seq: AtomicU8,
     input_buf: Mutex<[u8; IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD]>,
-    reconstructors: Mutex<BTreeMap<u16, IrMessageReconstructor>>,
+    send_channel: Channel<IrPacket>,
+    receive_channel: Channel<IrPacket>,
 }
 
-impl<'o> IrNetworkInterface<'o> {
+impl<'o> IrNetworkEngine<'o> {
     /// Create a new `IrNetworkInterface`.
-    fn new(mut irts: IrdaTransceiver<'o>, my_address: u16) -> IrNetworkInterface<'o> {
+    fn new(mut irts: IrdaTransceiver<'o>, my_address: u16) -> IrNetworkEngine<'o> {
         irts.enable(true);
-        IrNetworkInterface {
+        IrNetworkEngine {
             irts: Mutex::new(irts),
             my_address,
-            message_seq: AtomicU8::new(0),
             input_buf: Mutex::new([0u8; IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD]),
-            reconstructors: Mutex::new(BTreeMap::new()),
+            send_channel: Channel::new(),
+            receive_channel: Channel::new(),
         }
     }
 
@@ -170,38 +178,35 @@ impl<'o> IrNetworkInterface<'o> {
     }
 
     /// Send a message to a recipient
-    async fn send(&self, message: &[u8], recipient: u16) -> Result<bool, IrError> {
-        let total_len = message.len();
-        let chunk_seq = self.message_seq.fetch_add(1, Ordering::Relaxed);
-        let encoder = raptorq::Encoder::with_defaults(message, IR_CHUNK_SIZE as u16);
-        for packet in encoder.get_encoded_packets(IR_REPAIR_PACKETS as u32) {
-            let mut output_buf: [MaybeUninit<u8>; IR_PACKET_SIZE] =
-                [MaybeUninit::uninit(); IR_PACKET_SIZE];
-            let mut bb = BorrowedBuf::from(&mut output_buf[..]);
-            {
-                let mut bc = bb.unfilled();
-                // SAFETY: This shouldn't overflow as we should be writing at most `IR_PACKET_SIZE`
-                // bytes.
-                bc.append(&IR_MAGIC);
-                bc.append(&u16::to_be_bytes(recipient));
-                bc.append(&u16::to_be_bytes(self.my_address));
-                bc.append(&u8::to_be_bytes(chunk_seq));
-                let enc_packet = packet.serialize();
-                bc.append(&u16::to_be_bytes(enc_packet.len() as u16));
-                bc.append(&u16::to_be_bytes(total_len as u16));
-                bc.append(&enc_packet);
-            }
-            let crc = CRC.checksum(&bb.filled()[3..]); // do not CRC magic bytes
-            {
-                let mut bc = bb.unfilled();
-                bc.append(&u16::to_be_bytes(crc));
-            }
-            if !self.irts.lock().await.send(bb.filled()).await? {
-                return Ok(false);
-            }
-            Timer::after_millis(Self::random_delay(crc) as u64).await;
+    async fn send_packet(&self, packet: IrPacket) -> Result<u16, IrError> {
+        let mut output_buf: [MaybeUninit<u8>; IR_PACKET_SIZE] =
+            [MaybeUninit::uninit(); IR_PACKET_SIZE];
+        let mut bb = BorrowedBuf::from(&mut output_buf[..]);
+        {
+            let mut bc = bb.unfilled();
+            // SAFETY: This shouldn't overflow as we should be writing at most `IR_PACKET_SIZE`
+            // bytes.
+            bc.append(&IR_MAGIC);
+            bc.append(&u16::to_be_bytes(packet.recipient));
+            bc.append(&u16::to_be_bytes(self.my_address));
+            bc.append(&u8::to_be_bytes(packet.message_seq));
+            bc.append(&u16::to_be_bytes(packet.chunk_len));
+            bc.append(&u16::to_be_bytes(packet.total_len));
+            bc.append(&packet.contents);
         }
-        Ok(true)
+        let crc = CRC.checksum(&bb.filled()[3..]); // do not CRC magic bytes
+        {
+            let mut bc = bb.unfilled();
+            bc.append(&u16::to_be_bytes(crc));
+        }
+        /* log::info!(
+            "send packet: to {} seq {} len {}",
+            packet.recipient,
+            packet.message_seq,
+            bb.filled().len()
+        ); */
+        self.irts.lock().await.send(bb.filled()).await?;
+        Ok(crc)
     }
 
     async fn wait_for_byte(&self) -> Result<u8, IrError> {
@@ -221,7 +226,7 @@ impl<'o> IrNetworkInterface<'o> {
         let mut input_buf_guard = self.input_buf.lock().await;
         let input_buf = input_buf_guard.as_mut();
 
-        let packet = loop {
+        loop {
             for b in &mut input_buf[0..3] {
                 *b = self.wait_for_byte().await?;
             }
@@ -238,18 +243,22 @@ impl<'o> IrNetworkInterface<'o> {
                 let mut sc = SliceCursor::new(&input_buf[0..IR_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
                 if recipient != self.my_address {
-                    log::info!("packet not for me; for {recipient}");
+                    log::info!(
+                        "recv_packet: packet not for me (address: {}); for {} ",
+                        self.my_address,
+                        recipient
+                    );
                     continue;
                 }
                 let sender = sc.next_u16_be();
                 let chunk_seq = sc.next_u8();
                 let chunk_len = sc.next_u16_be() as usize;
                 if chunk_len > IR_CHUNK_SIZE + RAPTORQ_OVERHEAD {
-                    log::info!("malformed chunk of size {chunk_len}");
+                    log::info!("recv_packet: malformed chunk of size {chunk_len}");
                     continue;
                 }
                 let total_len = sc.next_u16_be();
-                log::info!("chunk len {chunk_len} seq {chunk_seq}");
+                // log::info!("recv_packet: chunk len {chunk_len} seq {chunk_seq}");
 
                 assert_eq!(sc.remaining(), 0);
 
@@ -266,23 +275,103 @@ impl<'o> IrNetworkInterface<'o> {
                 continue;
             }
             let contents = input_buf[..chunk_len].try_into().expect("packet too large");
-            break IrPacket {
+            return Ok(IrPacket {
                 recipient: self.my_address,
                 sender,
                 message_seq: chunk_seq,
                 chunk_len: chunk_len as u16,
                 total_len,
                 contents,
-            };
-        };
+            });
+        }
+    }
 
-        Ok(packet)
+    pub fn interface(&self) -> IrNetworkInterface<'_> {
+        IrNetworkInterface {
+            send_tx: self.send_channel.sender(),
+            receive_rx: self.receive_channel.receiver(),
+            my_address: self.my_address,
+            message_seq: AtomicU8::new(0),
+            reconstructors: Mutex::new(BTreeMap::new()),
+        }
+    }
+
+    async fn run_sender(&self) -> ! {
+        loop {
+            let packet = self.send_channel.receive().await;
+            match self.send_packet(packet).await {
+                Ok(crc) => {
+                    Timer::after_millis(Self::random_delay(crc) as u64).await;
+                }
+                Err(e) => {
+                    log::error!("ir send error: {e}");
+                    Timer::after_millis(SEND_RETRY_DELAY_MS).await;
+                }
+            }
+        }
+    }
+
+    async fn run_receiver(&self) -> ! {
+        loop {
+            match self.recv_packet().await {
+                Ok(packet) => self.receive_channel.send(packet).await,
+                Err(e) => {
+                    log::error!("ir recv error: {e}");
+                }
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn run_ir_engine(engine: &'static IrNetworkEngine<'static>) -> ! {
+    embassy_futures::join::join(engine.run_receiver(), engine.run_sender()).await;
+    // This tells the compiler to not worry about the return type
+    unreachable!();
+}
+
+impl NetworkEngine for IrNetworkEngine<'_> {
+    fn run(&'static self, spawner: embassy_executor::Spawner) -> Result<(), NetworkError> {
+        spawner
+            .spawn(run_ir_engine(self))
+            .expect("could not spawn IR receiver");
+        Ok(())
+    }
+}
+
+pub struct IrNetworkInterface<'a> {
+    send_tx: Sender<'a, IrPacket>,
+    receive_rx: Receiver<'a, IrPacket>,
+    my_address: u16,
+    message_seq: AtomicU8,
+    reconstructors: Mutex<BTreeMap<u16, IrMessageReconstructor>>,
+}
+
+impl IrNetworkInterface<'_> {
+    /// Send a message to a recipient
+    async fn send(&self, msg: Message<u16>) -> Result<(), IrError> {
+        let total_len = msg.contents.len();
+        let message_seq = self.message_seq.fetch_add(1, Ordering::Relaxed);
+        let encoder = raptorq::Encoder::with_defaults(&msg.contents, IR_CHUNK_SIZE as u16);
+        for packet in encoder.get_encoded_packets(IR_REPAIR_PACKETS as u32) {
+            let enc_packet = packet.serialize();
+            let packet = IrPacket {
+                recipient: msg.recipient,
+                sender: self.my_address,
+                message_seq,
+                chunk_len: enc_packet.len() as u16,
+                total_len: total_len as u16,
+                contents: enc_packet.into_iter().collect(),
+            };
+            self.send_tx.send(packet).await;
+        }
+        Ok(())
     }
 
     /// Read packets until we assemble a message, then return it
     async fn recv(&self) -> Result<Message<u16>, IrError> {
         loop {
-            let packet = self.recv_packet().await?;
+            let packet = self.receive_rx.receive().await;
             let sender = packet.sender;
             let recipient = packet.recipient;
             let mut reconstructors = self.reconstructors.lock().await;
@@ -300,28 +389,34 @@ impl<'o> IrNetworkInterface<'o> {
     }
 }
 
-impl Network for IrNetworkInterface<'_> {
+impl NetworkInterface for IrNetworkInterface<'_> {
     type Addr = u16;
 
     async fn send_message(&self, msg: Message<u16>) -> Result<(), NetworkError> {
-        while !self
-            .send(&msg.contents, msg.recipient)
-            .await
-            .map_err(|e| NetworkError::Send(alloc::format!("Send error: {e}")))?
-        {
-            Timer::after_millis(SEND_RETRY_DELAY_MS).await;
+        match self.send(msg).await {
+            Ok(_) => (),
+            Err(e) => log::error!("ir send: {e}"),
         }
         Ok(())
     }
 
     async fn recv_message(&self) -> Result<Message<u16>, NetworkError> {
-        self.recv()
+        let msg = self
+            .recv()
             .await
-            .map_err(|e| NetworkError::Receive(alloc::format!("Receive Error: {e}")))
+            .map_err(|e| NetworkError::Receive(alloc::format!("ir recv: {e}")))?;
+        Ok(msg)
+    }
+
+    fn my_address(&self) -> Self::Addr {
+        self.my_address
     }
 }
 
-/// Starts the IR networking interface and returns it.
-pub async fn start(irts: IrdaTransceiver<'_>, my_address: u16) -> IrNetworkInterface<'_> {
-    IrNetworkInterface::new(irts, my_address)
+/// Starts the IR networking engine and returns and interface to it.
+pub(crate) async fn start(
+    irts: IrdaTransceiver<'static>,
+    my_address: u16,
+) -> &'static IrNetworkEngine<'static> {
+    mk_static!(IrNetworkEngine, IrNetworkEngine::new(irts, my_address))
 }

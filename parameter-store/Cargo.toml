@@ -1,0 +1,20 @@
+[package]
+name = "parameter-store"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-runtime" }
+crc = "3.2"
+heapless = { version = "0.8.0", default-features = false }
+postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
+serde = { version = "1", default-features = false, features = ["alloc"] }
+thiserror = { version = "2", default-features = false }
+
+embedded-io = { version ="0.6", optional = true }
+embedded-storage = { version = "0.3", optional = true }
+
+[features]
+std = []
+embedded = ["dep:embedded-io", "dep:embedded-storage"]

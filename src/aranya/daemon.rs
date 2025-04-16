@@ -10,7 +10,7 @@ use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, Grap
 
 use crate::storage::imp::*;
 
-use super::{engine::EmbeddedEngine, error::*, sink::VecSink};
+use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
 
 // Use short names so we can more easily add generics.
 /// CE = Crypto Engine
@@ -58,7 +58,7 @@ impl Daemon {
     }
 
     pub async fn create_team(&mut self) -> Result<GraphId> {
-        let mut sink = VecSink::new();
+        let mut sink = DebugSink {};
 
         // Temporarily fix the nonce for demo purposes, TODO(chip): remove once we have proper onboarding
         let nonce = [0u8; 16];
@@ -76,7 +76,7 @@ impl Daemon {
         I: Into<i64>,
     {
         let mut aranya = self.aranya.lock().await;
-        let mut sink = VecSink::new();
+        let mut sink = DebugSink {};
         aranya.action(
             storage_id,
             &mut sink,
