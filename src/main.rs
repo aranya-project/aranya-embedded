@@ -13,12 +13,14 @@ mod net;
 mod storage;
 mod util;
 
-use aranya::daemon::Daemon;
+use aranya::daemon::{Daemon, Imp};
+use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
 use embassy_time::Timer;
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::cpu_control::{AppCoreGuard, CpuControl, Stack};
+use esp_hal::cpu_control::{CpuControl, Stack};
+use esp_hal::gpio::{GpioPin, Input, Pull};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, Executor};
 use esp_irda_transceiver::IrdaTransceiver;
@@ -50,8 +52,6 @@ async fn main(spawner: Spawner) {
     info!("Embassy initialized!");
 
     tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
-
-    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
 
     #[cfg(feature = "storage-internal")]
     let storage_provider = storage::internal::init().expect("couldn't get storage");
@@ -105,16 +105,12 @@ async fn main(spawner: Spawner) {
         Some(a) => a,
     };
 
-    daemon
-        .set_led(graph_id, 0, 255, 255)
-        .await
-        .expect("could not set LED");
-
     let mut network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES> =
         heapless::Vec::new();
 
     #[cfg(feature = "net-wifi")]
     {
+        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
         let engine = net::wifi::start(
             peripherals.WIFI,
             peripherals.RADIO_CLK,
@@ -143,10 +139,9 @@ async fn main(spawner: Spawner) {
         let engine = net::irda::start(irts, p.address).await;
         spawner
             .spawn(aranya::syncer::sync_irda(
-                daemon.get_client(),
+                daemon.get_imp(graph_id),
                 engine.interface(),
                 p.peers.clone(),
-                graph_id,
             ))
             .expect("could not spawn IrDA syncer task");
         if network_engines.push(engine).is_err() {
@@ -171,6 +166,10 @@ async fn main(spawner: Spawner) {
     // Don't drop the guard so we don't stop the second core
     core::mem::forget(app_core_guard);
 
+    spawner
+        .spawn(button_task(peripherals.GPIO0, daemon.get_imp(graph_id)))
+        .ok();
+
     spawner.spawn(heap_report()).ok();
 }
 
@@ -182,6 +181,18 @@ async fn net_task(
     log::info!("net task started");
     for e in network_engines {
         e.run(spawner).expect("could not start engine {e}");
+    }
+}
+
+#[embassy_executor::task]
+async fn button_task(pin: GpioPin<0>, imp: Imp) {
+    let mut driver = Input::new(pin, Pull::Up);
+    loop {
+        driver.wait_for_falling_edge().await;
+        match imp.call_action(vm_action!(set_led(255, 255, 0))).await {
+            Ok(_) => (),
+            Err(e) => log::error!("could not set LED: {e}"),
+        };
     }
 }
 

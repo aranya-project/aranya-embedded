@@ -49,8 +49,7 @@ use crate::mk_static;
 use crate::util::SliceCursor;
 
 const IR_PACKET_QUEUE_SIZE: usize = 2;
-type Mutex<T> =
-    embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
+type Mutex<T> = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>;
 type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
 type Sender<'a, T> =
     embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
@@ -75,10 +74,10 @@ const UART_BAUD_RATE: u64 = 115200;
 const UART_BYTE_DELAY_US: u64 = 10 * (1_000_000 / UART_BAUD_RATE) + 1;
 
 /// The minimum time to wait between packets.
-const RANDOM_MIN: u32 = 100;
+const RANDOM_MIN: u32 = 13;
 /// The distance between the minimum and maximum times to wait. Time between packets is then
 /// unformly distributed between `RANDOM_MIN` and `RANDOM_MIN + RANDOM_SPREAD`.
-const RANDOM_SPREAD: u32 = 200;
+const RANDOM_SPREAD: u32 = 50;
 /// How long to wait to retry after a failed send.
 const SEND_RETRY_DELAY_MS: u64 = 50;
 

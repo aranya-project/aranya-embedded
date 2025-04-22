@@ -6,7 +6,8 @@ use aranya_crypto::{
     keystore::memstore::MemStore,
     CipherSuite,
 };
-use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, GraphId};
+use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
 use crate::storage::imp::*;
 
@@ -32,7 +33,8 @@ pub(crate) type Client = ClientState<PE, SP>;
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
 
-type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;
+type Mutex<T> =
+    embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
 
 // TODO(chip): use actual keys
 const NULL_KEY: [u8; 32] = [0u8; 32];
@@ -71,21 +73,55 @@ impl Daemon {
         Ok(graph_id)
     }
 
-    pub async fn set_led<I>(&mut self, storage_id: GraphId, red: I, green: I, blue: I) -> Result<()>
-    where
-        I: Into<i64>,
-    {
-        let mut aranya = self.aranya.lock().await;
+    pub fn get_imp(&self, graph_id: GraphId) -> Imp {
+        Imp {
+            client: Arc::clone(&self.aranya),
+            graph_id,
+        }
+    }
+}
+
+/// A shareable interface to the client that works on a single GraphId.
+pub struct Imp {
+    client: Arc<Mutex<Client>>,
+    graph_id: GraphId,
+}
+
+impl Imp {
+    /// Lock the client and return a MutexGuard for it.
+    pub async fn get_client(&self) -> MutexGuard<'_, CriticalSectionRawMutex, Client> {
+        self.client.lock().await
+    }
+
+    pub fn graph_id(&self) -> GraphId {
+        self.graph_id
+    }
+
+    pub async fn add_commands(&self, cmds: &[impl Command + core::fmt::Debug]) -> Result<()> {
+        let mut client = self.get_client().await;
+        let mut trx = client.transaction(self.graph_id());
         let mut sink = DebugSink {};
-        aranya.action(
-            storage_id,
-            &mut sink,
-            vm_action!(set_led(red.into(), green.into(), blue.into())),
-        )?;
+        log::info!("cmds: {cmds:?}");
+        client.add_commands(&mut trx, &mut sink, cmds)?;
+        client.commit(&mut trx, &mut sink)?;
         Ok(())
     }
 
-    pub fn get_client(&self) -> Arc<Mutex<Client>> {
-        Arc::clone(&self.aranya)
+    pub async fn call_action(&self, action: aranya_runtime::VmAction<'_>) -> Result<()> {
+        let mut aranya = self.get_client().await;
+        let mut sink = DebugSink {};
+        Ok(aranya.action(self.graph_id, &mut sink, action)?)
     }
 }
+
+/* TODO(chip): when we have an async version of Actor
+impl Actor for Imp {
+    fn call_action(
+        &mut self,
+        action: aranya_runtime::VmAction<'_>,
+    ) -> Result<(), aranya_runtime::ClientError> {
+        let mut aranya = embassy_futures::block_on(self.get_client());
+        let mut sink = DebugSink {};
+        aranya.action(self.graph_id, &mut sink, action)
+    }
+} */

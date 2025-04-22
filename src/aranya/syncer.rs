@@ -1,15 +1,11 @@
-use core::marker::PhantomData;
-use core::ops::DerefMut;
-
 use alloc::collections::btree_map;
 use alloc::string::String;
-use alloc::sync::Arc;
 use alloc::vec;
 use alloc::{boxed::Box, collections::btree_map::BTreeMap};
-use aranya_crypto::{default::DefaultEngine, Rng};
+use aranya_crypto::Rng;
 use aranya_runtime::{
-    ClientState, Engine, GraphId, PeerCache, Sink, StorageProvider, SyncError, SyncRequestMessage,
-    SyncRequester, SyncResponder, SyncType, VmEffect, VmPolicy, MAX_SYNC_MESSAGE_SIZE,
+    PeerCache, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
+    MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -17,9 +13,8 @@ use parameter_store::MAX_PEERS;
 use crate::{
     aranya::error::Result,
     net::{Message, NetworkInterface},
+    Imp,
 };
-
-use super::daemon;
 
 type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;
 
@@ -75,59 +70,43 @@ struct SyncSession<'a, A> {
 }
 
 /// Aranya client.
-struct SyncEngine<'a, EN, SP, CE, N, S>
+struct SyncEngine<'a, N>
 where
     N: NetworkInterface,
 {
     /// Thread-safe Aranya client reference.
-    aranya: Arc<Mutex<ClientState<EN, SP>>>,
-    graph_id: GraphId,
+    imp: Imp,
     network: N,
     peers: &'a [N::Addr],
     sessions: Mutex<BTreeMap<N::Addr, SyncSession<'a, N::Addr>>>,
     peer_cache: Mutex<PeerCache>,
-    sink: Arc<Mutex<S>>,
-    _eng: PhantomData<CE>,
 }
 
-impl<'a, EN, SP, CE, N, S> SyncEngine<'a, EN, SP, CE, N, S>
+impl<'a, N> SyncEngine<'a, N>
 where
     N: NetworkInterface,
 {
     /// Creates a new [`Client`].
-    pub fn new(
-        aranya: Arc<Mutex<ClientState<EN, SP>>>,
-        graph_id: GraphId,
-        network: N,
-        peers: &'a [N::Addr],
-        sink: Arc<Mutex<S>>,
-    ) -> Self {
+    pub fn new(imp: Imp, network: N, peers: &'a [N::Addr]) -> Self {
         SyncEngine {
-            aranya,
-            graph_id,
+            imp,
             network,
             peers,
             sessions: Mutex::new(BTreeMap::new()),
             peer_cache: Mutex::new(PeerCache::new()),
-            sink,
-            _eng: PhantomData,
         }
     }
 }
 
-impl<EN, SP, CE, N, S> SyncEngine<'_, EN, SP, CE, N, S>
+impl<N> SyncEngine<'_, N>
 where
-    EN: Engine<Policy = VmPolicy<CE>, Effect = VmEffect> + Send + 'static,
-    SP: StorageProvider + Send + 'static,
-    CE: aranya_crypto::Engine + Send + Sync + 'static,
     N: NetworkInterface,
     N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>,
-    S: Sink<VmEffect>,
 {
     /// Syncs with the peer.
     /// Aranya client sends a `SyncRequest` to peer. The `SyncResponse` is handled below in
     /// [`handle_message()`](Self::handle_message).
-    async fn sync_peer(&self, id: GraphId, peer_addr: N::Addr) -> Result<()> {
+    async fn sync_peer(&self, peer_addr: N::Addr) -> Result<()> {
         let server_addr = self.network.my_address();
         let mut send_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
 
@@ -137,7 +116,11 @@ where
                 btree_map::Entry::Vacant(entry) => {
                     &mut entry
                         .insert(SyncSession {
-                            requester: SyncRequester::new(id, &mut Rng, server_addr),
+                            requester: SyncRequester::new(
+                                self.imp.graph_id(),
+                                &mut Rng,
+                                server_addr,
+                            ),
                             started_at: Instant::now(),
                         })
                         .requester
@@ -152,7 +135,7 @@ where
                     return Ok(());
                 }
             };
-            let mut client = self.aranya.lock().await;
+            let mut client = self.imp.get_client().await;
             let mut peer_cache = self.peer_cache.lock().await;
             requester.poll(&mut send_buf, client.provider(), &mut peer_cache)?
         };
@@ -168,7 +151,7 @@ where
     async fn initiate(&self) -> ! {
         loop {
             for p in self.peers {
-                self.sync_peer(self.graph_id, *p)
+                self.sync_peer(*p)
                     .await
                     .inspect_err(|e| log::error!("sync initiation: {e}"))
                     .ok();
@@ -182,7 +165,7 @@ where
         let mut responder = SyncResponder::new(from);
         responder.receive(request)?;
         let len = {
-            let mut aranya = self.aranya.lock().await;
+            let mut aranya = self.imp.get_client().await;
             let mut peer_cache = self.peer_cache.lock().await;
             responder.poll(&mut msg_buf, aranya.provider(), &mut peer_cache)?
         };
@@ -216,12 +199,7 @@ where
             .receive(bytes)?
             .ok_or(SyncError::MissingSyncResponse)?;
         if !cmds.is_empty() {
-            let mut client = self.aranya.lock().await;
-            let mut trx = client.transaction(self.graph_id);
-            let mut sink = self.sink.lock().await;
-            log::info!("cmds: {cmds:?}");
-            client.add_commands(&mut trx, sink.deref_mut(), &cmds)?;
-            client.commit(&mut trx, sink.deref_mut())?;
+            self.imp.add_commands(&cmds).await?;
         }
 
         Ok(())
@@ -272,25 +250,12 @@ pub async fn sync_wifi(
 #[cfg(feature = "net-irda")]
 #[embassy_executor::task]
 pub async fn sync_irda(
-    client: Arc<Mutex<daemon::Client>>,
+    imp: Imp,
     network: crate::net::irda::IrNetworkInterface<'static>,
     peers: heapless::Vec<u16, MAX_PEERS>,
-    graph_id: GraphId,
 ) {
-    use crate::aranya::sink::DebugSink;
-
     log::info!("IrDA syncer started");
-    let sink = Arc::new(Mutex::new(DebugSink {}));
-    let engine: SyncEngine<
-        '_,
-        crate::aranya::engine::EmbeddedEngine<DefaultEngine>,
-        aranya_runtime::linear::LinearStorageProvider<
-            crate::storage::imp::EspPartitionIoManager<esp_storage::FlashStorage>,
-        >,
-        DefaultEngine,
-        crate::net::irda::IrNetworkInterface<'_>,
-        DebugSink,
-    > = SyncEngine::new(client, graph_id, network, &peers, sink);
+    let engine = SyncEngine::new(imp, network, &peers);
 
     embassy_futures::join::join(engine.initiate(), engine.serve()).await;
 }
