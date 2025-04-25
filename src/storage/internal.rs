@@ -9,7 +9,6 @@ use aranya_runtime::storage::linear::io;
 use aranya_runtime::{GraphId, Location, StorageError as AranyaStorageError};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
-use embedded_storage::Storage;
 use esp_partition_table::{DataPartitionType, PartitionEntry, PartitionTable, PartitionType};
 use esp_storage::FlashStorage;
 use rkyv::rancor;
@@ -76,7 +75,7 @@ where
     if buf[0..HEADER_MAGIC.len()] != HEADER_MAGIC {
         return Err(StorageError::BadHeader);
     }
-    log::info!("magic OK");
+    log::debug!("magic OK");
     let header =
         rkyv::access::<ArchivedEspStorageHeader, rancor::Error>(&buf[HEADER_MAGIC.len()..])
             .map_err(|_| StorageError::BadHeader)?;
@@ -97,6 +96,7 @@ where
     buf.extend_from_slice(&HEADER_MAGIC);
     buf.extend_from_slice(&rkyv::to_bytes::<rancor::Error>(header)?);
 
+    log::debug!("write header @{offset:08X}");
     storage
         .lock(|storage| storage.borrow_mut().write(offset, &buf))
         .map_err(|_| StorageError::Write)?;
@@ -190,14 +190,14 @@ where
             .map_err(log_error(AranyaStorageError::IoError))?;
 
         log::debug!("Fetching segment @ {offset}, len {data_size}");
-        log::debug!("  header bytes: {:?}", &segment_header);
+        log::trace!("  header bytes: {:?}", &segment_header);
         // SAFETY: the box is zeroed before we `assume_init()`
         let mut byte_buf = unsafe { Box::new_zeroed_slice(data_size).assume_init() };
         let read_pos = read_pos + (MAGIC_LEN + SEGMENT_HEADER_SIZE) as u32;
         self.storage
             .lock(|s| s.borrow_mut().read(read_pos, &mut byte_buf))
             .map_err(storage_error)?;
-        log::debug!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
+        log::trace!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
         postcard::from_bytes(&byte_buf).map_err(log_error(AranyaStorageError::IoError))
     }
 }
@@ -307,13 +307,14 @@ where
             })
             .map_err(log_error(AranyaStorageError::IoError))?,
         );
-        log::debug!("  header bytes: {:?}", &disk_bytes);
-        log::debug!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
+        log::trace!("  header bytes: {:?}", &disk_bytes);
+        log::trace!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
 
         disk_bytes.append(&mut item_bytes);
         assert_eq!(disk_bytes.len(), item_size);
 
         let write_pos = self.base + DATA_OFFSET + offset as u32;
+        log::debug!("write segment @{write_pos:08X}");
         self.storage
             .lock(|storage| storage.borrow_mut().write(write_pos, &disk_bytes))
             .map_err(storage_error)?;

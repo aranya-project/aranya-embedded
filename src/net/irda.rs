@@ -61,7 +61,6 @@ const IR_MAGIC: [u8; 3] = [0xF0, 0x0F, 0xF0];
 const IR_CHUNK_SIZE: usize = 64; // needs to be less than 65536 because this will become the raptorq MTU which is u16
 const IR_HEADER_SIZE: usize = 9; // recipient, sender, chunk_seq, chunk_len, total_len
 const IR_CRC_SIZE: usize = (CRC.algorithm.width / 8) as usize;
-const IR_REPAIR_PACKETS: usize = 3; // chosen arbitrarily. Should probably be determined dynamically by message size.
 const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if there's a way to ask raptorq for this
 const IR_PACKET_SIZE: usize =
     IR_MAGIC.len() + IR_HEADER_SIZE + IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD;
@@ -71,13 +70,13 @@ const UART_BAUD_RATE: u64 = 115200;
 /// How long it takes to transmit one byte (10 bit times) in microseconds
 // This really should divide and take the ceiling but all we want is an upper bound and the
 // integer math is less troublesome in const context.
-const UART_BYTE_DELAY_US: u64 = 10 * (1_000_000 / UART_BAUD_RATE) + 1;
+const UART_BYTE_DELAY_US: u64 = 1000 * (1_000_000 / UART_BAUD_RATE) + 1;
 
 /// The minimum time to wait between packets.
-const RANDOM_MIN: u32 = 13;
+const RANDOM_MIN: u32 = 25;
 /// The distance between the minimum and maximum times to wait. Time between packets is then
 /// unformly distributed between `RANDOM_MIN` and `RANDOM_MIN + RANDOM_SPREAD`.
-const RANDOM_SPREAD: u32 = 50;
+const RANDOM_SPREAD: u32 = 100;
 /// How long to wait to retry after a failed send.
 const SEND_RETRY_DELAY_MS: u64 = 50;
 
@@ -113,6 +112,7 @@ pub struct IrMessageReconstructor {
     decoder: raptorq::Decoder,
     message_seq: u8,
     total_len: u16,
+    packets_recvd: usize,
     finished: bool,
 }
 
@@ -128,6 +128,7 @@ impl IrMessageReconstructor {
             )),
             message_seq: initial_packet.message_seq,
             total_len: initial_packet.total_len,
+            packets_recvd: 0,
             finished: false,
         }
     }
@@ -138,11 +139,17 @@ impl IrMessageReconstructor {
         if packet.message_seq != self.message_seq || packet.total_len != self.total_len {
             // sequence or length id different; this is a new packet sequence.
             // Reset our state.
+            log::info!(
+                "reconstructor reset with {}/{} est. packets",
+                self.packets_recvd,
+                (self.total_len - 1) / 64 + 1
+            );
             *self = IrMessageReconstructor::new(&packet);
         } else if self.finished {
             // We are done but this is part of a message we've already completed
             return None;
         }
+        self.packets_recvd += 1;
         self.decoder
             .decode(EncodingPacket::deserialize(&packet.contents))
             .inspect(|_| self.finished = true)
@@ -242,7 +249,7 @@ impl<'o> IrNetworkEngine<'o> {
                 let mut sc = SliceCursor::new(&input_buf[0..IR_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
                 if recipient != self.my_address {
-                    log::info!(
+                    log::debug!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
                         recipient
@@ -253,7 +260,7 @@ impl<'o> IrNetworkEngine<'o> {
                 let chunk_seq = sc.next_u8();
                 let chunk_len = sc.next_u16_be() as usize;
                 if chunk_len > IR_CHUNK_SIZE + RAPTORQ_OVERHEAD {
-                    log::info!("recv_packet: malformed chunk of size {chunk_len}");
+                    log::debug!("recv_packet: malformed chunk of size {chunk_len}");
                     continue;
                 }
                 let total_len = sc.next_u16_be();
@@ -352,7 +359,8 @@ impl IrNetworkInterface<'_> {
         let total_len = msg.contents.len();
         let message_seq = self.message_seq.fetch_add(1, Ordering::Relaxed);
         let encoder = raptorq::Encoder::with_defaults(&msg.contents, IR_CHUNK_SIZE as u16);
-        for packet in encoder.get_encoded_packets(IR_REPAIR_PACKETS as u32) {
+        let repair_packets = (total_len / IR_CHUNK_SIZE) * 12 / 10; // 20% extra packets
+        for packet in encoder.get_encoded_packets(repair_packets as u32) {
             let enc_packet = packet.serialize();
             let packet = IrPacket {
                 recipient: msg.recipient,

@@ -1,3 +1,5 @@
+use core::ops::DerefMut;
+
 use alloc::sync::Arc;
 use aranya_crypto::{
     aead::{Aead, AeadKey},
@@ -6,7 +8,10 @@ use aranya_crypto::{
     keystore::memstore::MemStore,
     CipherSuite,
 };
-use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId};
+use aranya_runtime::{
+    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache, Sink,
+    VmEffect,
+};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
 use crate::storage::imp::*;
@@ -73,21 +78,23 @@ impl Daemon {
         Ok(graph_id)
     }
 
-    pub fn get_imp(&self, graph_id: GraphId) -> Imp {
+    pub fn get_imp<S: Sink<VmEffect>>(&self, graph_id: GraphId, sink: S) -> Imp<S> {
         Imp {
             client: Arc::clone(&self.aranya),
             graph_id,
+            sink: Mutex::new(sink),
         }
     }
 }
 
 /// A shareable interface to the client that works on a single GraphId.
-pub struct Imp {
+pub struct Imp<S: Sink<VmEffect>> {
     client: Arc<Mutex<Client>>,
     graph_id: GraphId,
+    sink: Mutex<S>,
 }
 
-impl Imp {
+impl<S: Sink<VmEffect>> Imp<S> {
     /// Lock the client and return a MutexGuard for it.
     pub async fn get_client(&self) -> MutexGuard<'_, CriticalSectionRawMutex, Client> {
         self.client.lock().await
@@ -97,20 +104,29 @@ impl Imp {
         self.graph_id
     }
 
-    pub async fn add_commands(&self, cmds: &[impl Command + core::fmt::Debug]) -> Result<()> {
+    pub async fn add_commands(
+        &self,
+        cmds: &[impl Command + core::fmt::Debug],
+        peer_cache: &mut PeerCache,
+    ) -> Result<()> {
         let mut client = self.get_client().await;
         let mut trx = client.transaction(self.graph_id());
-        let mut sink = DebugSink {};
+        let mut sink = self.sink.lock().await;
         log::info!("cmds: {cmds:?}");
-        client.add_commands(&mut trx, &mut sink, cmds)?;
-        client.commit(&mut trx, &mut sink)?;
+        client.add_commands(&mut trx, sink.deref_mut(), cmds)?;
+        client.commit(&mut trx, sink.deref_mut())?;
+        client.update_heads(
+            self.graph_id,
+            cmds.iter().filter_map(|cmd| cmd.address().ok()),
+            peer_cache,
+        )?;
         Ok(())
     }
 
     pub async fn call_action(&self, action: aranya_runtime::VmAction<'_>) -> Result<()> {
         let mut aranya = self.get_client().await;
-        let mut sink = DebugSink {};
-        Ok(aranya.action(self.graph_id, &mut sink, action)?)
+        let mut sink = self.sink.lock().await;
+        Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
     }
 }
 

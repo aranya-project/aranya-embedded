@@ -16,23 +16,25 @@ mod util;
 use aranya::daemon::{Daemon, Imp};
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
-use embassy_time::Timer;
+use embassy_time::{Duration, TimeoutError, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::cpu_control::{CpuControl, Stack};
 use esp_hal::gpio::{GpioPin, Input, Pull};
+use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::interrupt::Priority;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal_embassy::{main, Executor};
+use esp_hal_embassy::{main, InterruptExecutor};
 use esp_irda_transceiver::IrdaTransceiver;
 use esp_storage::FlashStorage;
+use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
 use log::info;
 use net::NetworkEngine;
-use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters};
+use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
-static NET_STACK: StaticCell<Stack<8192>> = StaticCell::new();
+//static NET_STACK: StaticCell<Stack<8192>> = StaticCell::new();
 
 #[main]
 async fn main(spawner: Spawner) {
@@ -51,7 +53,10 @@ async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
-    tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+    //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
+        .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
     let storage_provider = storage::internal::init().expect("couldn't get storage");
@@ -137,18 +142,17 @@ async fn main(spawner: Spawner) {
             peripherals.GPIO8,
         );
         let engine = net::irda::start(irts, p.address).await;
-        spawner
-            .spawn(aranya::syncer::sync_irda(
-                daemon.get_imp(graph_id),
-                engine.interface(),
-                p.peers.clone(),
-            ))
-            .expect("could not spawn IrDA syncer task");
+        spawner.must_spawn(aranya::syncer::sync_irda(
+            daemon.get_imp(graph_id, NeopixelSink::new()),
+            engine.interface(),
+            p.peers.clone(),
+        ));
         if network_engines.push(engine).is_err() {
             log::info!("could not start IR network engine");
         }
     }
 
+    /* TODO(chip): re-enable this when esp-storage works multi-core
     // Spawn a task on the second CPU to run the network engines
     let mut cpu_control = CpuControl::new(peripherals.CPU_CTRL);
     let stack = NET_STACK.init(Stack::new());
@@ -165,34 +169,81 @@ async fn main(spawner: Spawner) {
         .expect("could not start on second core");
     // Don't drop the guard so we don't stop the second core
     core::mem::forget(app_core_guard);
+    */
 
-    spawner
-        .spawn(button_task(peripherals.GPIO0, daemon.get_imp(graph_id)))
-        .ok();
+    // Spawn a high priority InterruptExecutor to run the network engines
+    {
+        let sw_ints = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+        static EXECUTOR: StaticCell<InterruptExecutor<2>> = StaticCell::new();
+        let executor = InterruptExecutor::new(sw_ints.software_interrupt2);
+        let executor = EXECUTOR.init(executor);
+        let spawner = executor.start(Priority::Priority3);
+        spawner.must_spawn(net_task(network_engines));
+    }
 
-    spawner.spawn(heap_report()).ok();
+    spawner.must_spawn(button_task(
+        peripherals.GPIO0,
+        daemon.get_imp(graph_id, NeopixelSink::new()),
+        p.color,
+    ));
+
+    spawner.must_spawn(led_task(neopixel, p.color));
+
+    spawner.must_spawn(heap_report());
 }
 
 #[embassy_executor::task]
-async fn net_task(
-    spawner: Spawner,
-    network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>,
-) {
+async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>) {
     log::info!("net task started");
+
+    let spawner = Spawner::for_current_executor().await;
     for e in network_engines {
         e.run(spawner).expect("could not start engine {e}");
     }
 }
 
 #[embassy_executor::task]
-async fn button_task(pin: GpioPin<0>, imp: Imp) {
+async fn button_task(pin: GpioPin<0>, imp: Imp<NeopixelSink>, color: RgbU8) {
     let mut driver = Input::new(pin, Pull::Up);
     loop {
         driver.wait_for_falling_edge().await;
-        match imp.call_action(vm_action!(set_led(255, 255, 0))).await {
+        log::info!("led pressed");
+        match imp
+            .call_action(vm_action!(set_led(
+                color.red as i64,
+                color.green as i64,
+                color.blue as i64
+            )))
+            .await
+        {
             Ok(_) => (),
             Err(e) => log::error!("could not set LED: {e}"),
         };
+    }
+}
+
+#[embassy_executor::task]
+async fn led_task(mut neopixel: Neopixel<'static>, initial_color: RgbU8) {
+    let mut intensity = 1.0;
+    let mut color = initial_color;
+    loop {
+        match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
+            Ok(c) => {
+                color = c;
+                intensity = 1.0;
+            }
+            Err(TimeoutError) => intensity -= (intensity - 0.3) / 5.0,
+        };
+        let effective_color = color * intensity;
+        log::trace!("effective color: {effective_color:?} (intensity {intensity:04})");
+        neopixel
+            .set_color(
+                effective_color.red,
+                effective_color.green,
+                effective_color.blue,
+            )
+            .inspect_err(|e| log::error!("neopixel: {e}"))
+            .ok();
     }
 }
 
