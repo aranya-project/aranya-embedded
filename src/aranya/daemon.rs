@@ -71,6 +71,20 @@ impl Daemon {
         Ok(graph_id)
     }
 
+    pub async fn set_led<I>(&mut self, storage_id: GraphId, red: I, green: I, blue: I) -> Result<()>
+    where
+        I: Into<i64>,
+    {
+        let mut aranya = self.aranya.lock().await;
+        let mut sink = VecSink::new();
+        aranya.action(
+            storage_id,
+            &mut sink,
+            vm_action!(set_led(red.into(), green.into(), blue.into())),
+        )?;
+        Ok(())
+    }
+
     pub fn get_client(&self) -> Arc<Mutex<Client>> {
         Arc::clone(&self.aranya)
     }
