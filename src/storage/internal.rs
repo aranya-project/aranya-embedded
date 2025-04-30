@@ -69,9 +69,9 @@ fn fetch_header<S>(
 where
     S: embedded_storage::ReadStorage,
 {
-    let mut buf = [0u8; HEADER_MAGIC.len() + HEADER_SIZE];
+    let mut buf = rkyv::util::Align([0u8; HEADER_MAGIC.len() + HEADER_SIZE]);
     storage
-        .lock(|storage| storage.borrow_mut().read(offset, &mut buf))
+        .lock(|storage| storage.borrow_mut().read(offset, buf.as_mut()))
         .map_err(|_| StorageError::BadHeader)?;
     if buf[0..HEADER_MAGIC.len()] != HEADER_MAGIC {
         return Err(StorageError::BadHeader);
@@ -169,14 +169,14 @@ where
     where
         T: serde::de::DeserializeOwned,
     {
-        let mut segment_header = [0u8; MAGIC_LEN + SEGMENT_HEADER_SIZE];
+        let mut segment_header = rkyv::util::Align([0u8; MAGIC_LEN + SEGMENT_HEADER_SIZE]);
         let offset: u32 = offset
             .try_into()
             .map_err(log_error(AranyaStorageError::IoError))?;
 
         let read_pos = self.base + DATA_OFFSET + offset;
         self.storage
-            .lock(|s| s.borrow_mut().read(read_pos, &mut segment_header))
+            .lock(|s| s.borrow_mut().read(read_pos, segment_header.as_mut()))
             .map_err(storage_error)?;
         if segment_header[0..MAGIC_LEN] != SEGMENT_HEADER_MAGIC {
             log::error!(
@@ -197,10 +197,8 @@ where
 
         log::debug!("Fetching segment @ {offset}, len {data_size}");
         log::debug!("  header bytes: {:?}", &segment_header);
-        let byte_buf = Box::new_uninit_slice(data_size);
-        // SAFETY: This should be valid, as the underlying representation of a `u8` is just a byte
-        // of memory. That underlying byte can't exceed the range of a `u8` by definition.
-        let mut byte_buf = unsafe { byte_buf.assume_init() };
+        // SAFETY: the box is zeroed before we `assume_init()`
+        let mut byte_buf = unsafe { Box::new_zeroed_slice(data_size).assume_init() };
         let read_pos = read_pos + (MAGIC_LEN + SEGMENT_HEADER_SIZE) as u32;
         self.storage
             .lock(|s| s.borrow_mut().read(read_pos, &mut byte_buf))
