@@ -173,11 +173,13 @@ dependencies = [
  "aranya-policy-lang",
  "aranya-policy-vm",
  "aranya-runtime",
+ "crc",
  "critical-section",
  "edge-dhcp",
  "edge-nal",
  "edge-nal-embassy",
  "embassy-executor",
+ "embassy-futures",
  "embassy-net",
  "embassy-sync",
  "embassy-time",
@@ -193,6 +195,7 @@ dependencies = [
  "esp-backtrace",
  "esp-hal",
  "esp-hal-embassy",
+ "esp-irda-transceiver",
  "esp-partition-table",
  "esp-println",
  "esp-storage",
@@ -203,6 +206,7 @@ dependencies = [
  "log",
  "owo-colors",
  "postcard",
+ "raptorq",
  "rkyv",
  "ron",
  "serde",
@@ -617,6 +621,21 @@ checksum = "59ed5838eebb26a2bb2e58f6d5b5316989ae9d08bab10e0e6d103e656d1b0280"
 dependencies = [
  "libc",
 ]
+
+[[package]]
+name = "crc"
+version = "3.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "69e6e4d7b33a94f0991c26729976b10ebde1d34c3ee82408fb536164fa10d636"
+dependencies = [
+ "crc-catalog",
+]
+
+[[package]]
+name = "crc-catalog"
+version = "2.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "19d374276b40fb8bbdee95aef7c7fa6b5316ec764510eb64b8dd0e2ed0d7e7f5"
 
 [[package]]
 name = "critical-section"
@@ -1309,6 +1328,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.100",
+]
+
+[[package]]
+name = "esp-irda-transceiver"
+version = "0.2.0"
+source = "git+git+ssh://git@github.com/aranya-project/esp-irda-transceiver#1e5ab56dce37f35848b317c3ff1e8e394bac434a"
+dependencies = [
+ "embedded-hal-async",
+ "esp-hal",
+ "esp32s3",
+ "log",
 ]
 
 [[package]]
@@ -2223,6 +2253,12 @@ checksum = "d25bf25ec5ae4a3f1b92f929810509a2f53d7dca2f50b794ff57e3face536c8f"
 dependencies = [
  "rand_core",
 ]
+
+[[package]]
+name = "raptorq"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "90b1b1fad69672f0b901b5004863ea4307f03d168a3db5f2bcba4d3dfed88e97"
 
 [[package]]
 name = "regex-syntax"

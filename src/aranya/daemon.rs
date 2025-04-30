@@ -8,7 +8,7 @@ use aranya_crypto::{
 };
 use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, GraphId};
 
-use crate::storage::sd::io_manager::GraphManager;
+use crate::storage::imp::*;
 
 use super::{engine::EmbeddedEngine, error::*, sink::VecSink};
 
@@ -60,9 +60,9 @@ impl Daemon {
     pub async fn create_team(&mut self) -> Result<GraphId> {
         let mut sink = VecSink::new();
 
-        // Temporarily fix the nonce for demo purposes, TODO: remove
-        //Rng.fill_bytes(&mut nonce);
+        // Temporarily fix the nonce for demo purposes, TODO(chip): remove once we have proper onboarding
         let nonce = [0u8; 16];
+        //Rng.fill_bytes(&mut nonce);
 
         let mut aranya = self.aranya.lock().await;
         let graph_id =

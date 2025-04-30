@@ -1,6 +1,7 @@
 #![no_std]
 #![no_main]
 #![feature(impl_trait_in_assoc_type)]
+#![feature(core_io_borrowed_buf)]
 
 extern crate alloc;
 
@@ -17,6 +18,7 @@ use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::main;
+use esp_irda_transceiver::IrdaTransceiver;
 use log::info;
 
 #[main]
@@ -76,7 +78,17 @@ async fn main(spawner: Spawner) {
 
     #[cfg(feature = "net-irda")]
     {
-        let network = net::irda::start().await;
+        let irts = IrdaTransceiver::new(
+            peripherals.UART1,
+            peripherals.GPIO39,
+            peripherals.GPIO38,
+            peripherals.GPIO8,
+        );
+        let my_address = match option_env!("IR_ADDRESS") {
+            Some(v) => v.parse::<u16>().expect("IR_ADDRESS must be an integer"),
+            None => 0, // just a default for testing
+        };
+        let network = net::irda::start(irts, my_address).await;
         spawner
             .spawn(aranya::syncer::sync_irda(daemon.get_client(), network))
             .expect("could not spawn IrDA syncer task");
