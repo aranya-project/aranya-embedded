@@ -9,6 +9,7 @@ use aranya_runtime::storage::linear::io;
 use aranya_runtime::{GraphId, Location, StorageError as AranyaStorageError};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_sync::blocking_mutex::Mutex;
+use embedded_storage::Storage;
 use esp_partition_table::{DataPartitionType, PartitionEntry, PartitionTable, PartitionType};
 use esp_storage::FlashStorage;
 use rkyv::rancor;
@@ -113,6 +114,19 @@ pub fn init() -> Result<LinearStorageProvider<EspPartitionIoManager<FlashStorage
         storage,
         data_partition,
     )))
+}
+
+// Destroy this storage by erasing the header block
+pub fn nuke() -> Result<(), StorageError> {
+    let mut storage = FlashStorage::new();
+    let data_partition = find_data_partition(&mut storage)?;
+    storage
+        .write(
+            data_partition.offset,
+            &[0u8; FlashStorage::SECTOR_SIZE as usize],
+        )
+        .map_err(storage_error)?;
+    Ok(())
 }
 
 pub struct Reader<S>

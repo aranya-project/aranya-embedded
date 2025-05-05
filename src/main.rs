@@ -185,6 +185,7 @@ async fn main(spawner: Spawner) {
         peripherals.GPIO0,
         daemon.get_imp(graph_id, NeopixelSink::new()),
         p.color,
+        parameters,
     ));
 
     spawner.must_spawn(led_task(neopixel, p.color));
@@ -203,22 +204,44 @@ async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX
 }
 
 #[embassy_executor::task]
-async fn button_task(pin: GpioPin<0>, imp: Imp<NeopixelSink>, color: RgbU8) {
+async fn button_task(
+    pin: GpioPin<0>,
+    imp: Imp<NeopixelSink>,
+    color: RgbU8,
+    mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
+) {
     let mut driver = Input::new(pin, Pull::Up);
     loop {
         driver.wait_for_falling_edge().await;
-        log::info!("led pressed");
-        match imp
-            .call_action(vm_action!(set_led(
-                color.red as i64,
-                color.green as i64,
-                color.blue as i64
-            )))
-            .await
-        {
-            Ok(_) => (),
-            Err(e) => log::error!("could not set LED: {e}"),
-        };
+        match embassy_time::with_timeout(Duration::from_secs(5), driver.wait_for_high()).await {
+            Ok(_) => {
+                log::info!("led pressed");
+                match imp
+                    .call_action(vm_action!(set_led(
+                        color.red as i64,
+                        color.green as i64,
+                        color.blue as i64
+                    )))
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => log::error!("could not set LED: {e}"),
+                };
+            }
+            Err(TimeoutError) => {
+                // Button has been held for five seconds; DESTROY THE WORLD
+                parameters.update(|p| p.graph_id = None).ok();
+                #[cfg(feature = "storage-internal")]
+                storage::internal::nuke().expect("could not nuke!?");
+                log::info!("Storage nuked. Release button to reset.");
+                log::info!("");  // Sometimes espflash doesn't flush the last line so the message isn't visible.
+                // wait for the button to go high so we don't accidentally wind up in the
+                // firmware loader. But do it in a busy loop so we don't yield to any other
+                // async tasks.
+                while driver.is_low() {}
+                esp_hal::reset::software_reset();
+            }
+        }
     }
 }
 
