@@ -19,7 +19,7 @@ use crate::{
 
 type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;
 
-const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(5);
+const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum SyncMessageType {
@@ -143,6 +143,7 @@ where
             let mut client = self.imp.get_client().await;
             let mut peer_caches = self.peer_caches.lock().await;
             let peer_cache = peer_caches.entry(peer_addr).or_default();
+            log::info!("peer_cache for {peer_addr}: {peer_cache:?}");
             requester.poll(&mut send_buf, client.provider(), peer_cache)?
         };
         log::info!("sync_peer: sending Request len {len} to {peer_addr}");
@@ -161,54 +162,62 @@ where
                     .await
                     .inspect_err(|e| log::error!("sync initiation: {e}"))
                     .ok();
-                Timer::after_millis(1000).await;
+                Timer::after_millis(100).await;
             }
         }
     }
 
     async fn sync_respond(&self, from: N::Addr, request: SyncRequestMessage) -> Result<()> {
-        let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
         let mut responder = SyncResponder::new(from);
         responder.receive(request)?;
-        let len = {
-            let mut aranya = self.imp.get_client().await;
-            let mut peer_caches = self.peer_caches.lock().await;
-            let peer_cache = peer_caches.entry(from).or_default();
-            responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
-        };
-        /* if len == 0 {
-            log::info!("handle_poll: nothing to send");
-            return Ok(());
-        } */
-        log::info!("sync_respond: response len {}", len);
-        msg_buf.truncate(len);
-        let response_message =
-            SyncMessage::new(SyncMessageType::Response, msg_buf.into_boxed_slice());
-        let msg = response_message.into_message(self.network.my_address(), from)?;
-        self.network.send_message(msg).await?;
+        let mut c = 0;
+        while responder.ready() {
+            let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
+            let len = {
+                let mut aranya = self.imp.get_client().await;
+                let mut peer_caches = self.peer_caches.lock().await;
+                let peer_cache = peer_caches.entry(from).or_default();
+                responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
+            };
+            log::info!(
+                "sync_respond: responding to {from} with len {} loop {}",
+                len,
+                c
+            );
+            c += 1;
+            msg_buf.truncate(len);
+            let response_message =
+                SyncMessage::new(SyncMessageType::Response, msg_buf.into_boxed_slice());
+            let msg = response_message.into_message(self.network.my_address(), from)?;
+            self.network.send_message(msg).await?;
+        }
 
         Ok(())
     }
 
     async fn process_response(&self, from: N::Addr, bytes: &[u8]) -> Result<()> {
-        let requester = &mut self
-            .sessions
-            .lock()
-            .await
-            .remove(&from)
+        let mut sessions = self.sessions.lock().await;
+        let requester = &mut sessions
+            .get_mut(&from)
             .ok_or(SyncError::SessionMismatch)?
             .requester;
-        if bytes.is_empty() {
-            log::info!("nothing to sync");
-            return Ok(());
-        }
-        let cmds = requester
-            .receive(bytes)?
-            .ok_or(SyncError::MissingSyncResponse)?;
-        if !cmds.is_empty() {
+
+        let cmds = {
+            let mut aranya = self.imp.get_client().await;
             let mut peer_caches = self.peer_caches.lock().await;
             let peer_cache = peer_caches.entry(from).or_default();
-            self.imp.add_commands(&cmds, peer_cache).await?;
+            requester.receive(bytes, aranya.provider(), peer_cache)?
+        };
+        if let Some(cmds) = cmds {
+            if !cmds.is_empty() {
+                let mut peer_caches = self.peer_caches.lock().await;
+                let peer_cache = peer_caches.entry(from).or_default();
+                self.imp.add_commands(&cmds, peer_cache).await?;
+            }
+        } else {
+            // We're done, destroy the requester
+            log::info!("sync ended with {from}");
+            sessions.remove(&from);
         }
 
         Ok(())
@@ -217,7 +226,11 @@ where
     async fn handle_message(&self) -> Result<()> {
         let msg = self.network.recv_message().await?;
         let (from, sm) = SyncMessage::from_message(msg)?;
-        log::info!("received SyncMessage {:?} len {}", sm.t, sm.bytes.len());
+        log::info!(
+            "received SyncMessage {:?} from {from}, len {}",
+            sm.t,
+            sm.bytes.len()
+        );
         match sm.t {
             SyncMessageType::Request => {
                 let st: SyncType<<N as NetworkInterface>::Addr> = postcard::from_bytes(&sm.bytes)?;
