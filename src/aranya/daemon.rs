@@ -112,7 +112,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
         let mut client = self.get_client().await;
         let mut trx = client.transaction(self.graph_id());
         let mut sink = self.sink.lock().await;
-        log::info!("cmds: {cmds:?}");
+        dump_commands(cmds);
         client.add_commands(&mut trx, sink.deref_mut(), cmds)?;
         client.commit(&mut trx, sink.deref_mut())?;
         client.update_heads(
@@ -127,6 +127,12 @@ impl<S: Sink<VmEffect>> Imp<S> {
         let mut aranya = self.get_client().await;
         let mut sink = self.sink.lock().await;
         Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
+    }
+}
+
+fn dump_commands(cmds: &[impl Command]) {
+    for c in cmds {
+        log::info!("  priority {:?} {}", c.priority(), c.id());
     }
 }
 
