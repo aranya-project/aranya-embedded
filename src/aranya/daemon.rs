@@ -9,7 +9,7 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache, Sink,
+    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, Sink, Transaction,
     VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
@@ -107,19 +107,21 @@ impl<S: Sink<VmEffect>> Imp<S> {
     pub async fn add_commands(
         &self,
         cmds: &[impl Command + core::fmt::Debug],
-        peer_cache: &mut PeerCache,
+        trx: &mut Option<Transaction<SP, PE>>,
     ) -> Result<()> {
         let mut client = self.get_client().await;
-        let mut trx = client.transaction(self.graph_id());
+        let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
         let mut sink = self.sink.lock().await;
         dump_commands(cmds);
-        client.add_commands(&mut trx, sink.deref_mut(), cmds)?;
+        client.add_commands(trx, sink.deref_mut(), cmds)?;
+
+        Ok(())
+    }
+
+    pub async fn commit(&self, mut trx: Transaction<SP, PE>) -> Result<()> {
+        let mut client = self.get_client().await;
+        let mut sink = self.sink.lock().await;
         client.commit(&mut trx, sink.deref_mut())?;
-        client.update_heads(
-            self.graph_id,
-            cmds.iter().filter_map(|cmd| cmd.address().ok()),
-            peer_cache,
-        )?;
         Ok(())
     }
 

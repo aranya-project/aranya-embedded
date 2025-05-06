@@ -4,7 +4,7 @@ use alloc::vec;
 use alloc::{boxed::Box, collections::btree_map::BTreeMap};
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    PeerCache, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
+    PeerCache, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction,
     MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
@@ -12,6 +12,7 @@ use parameter_store::MAX_PEERS;
 
 use crate::hardware::neopixel::NeopixelSink;
 use crate::{
+    aranya::daemon::{PE, SP},
     aranya::error::Result,
     net::{Message, NetworkInterface},
     Imp,
@@ -67,7 +68,8 @@ pub enum SyncResponse {
 /// Container for a SyncRequester and its starting timestamp
 struct SyncSession<'a, A> {
     requester: SyncRequester<'a, A>,
-    started_at: Instant,
+    trx: Option<Transaction<SP, PE>>,
+    last_seen: Instant,
 }
 
 /// Aranya client.
@@ -126,15 +128,20 @@ where
                                 &mut Rng,
                                 server_addr,
                             ),
-                            started_at: Instant::now(),
+                            trx: None,
+                            last_seen: Instant::now(),
                         })
                         .requester
                 }
                 btree_map::Entry::Occupied(entry) => {
-                    let started_at = entry.get().started_at;
-                    if Instant::now() - started_at > SYNC_STALL_TIMEOUT {
-                        // sync is stalled. Remove this entry
-                        entry.remove();
+                    let last_seen = entry.get().last_seen;
+                    if Instant::now() - last_seen > SYNC_STALL_TIMEOUT {
+                        log::info!("sync_peer: sync stalled for {peer_addr}");
+                        // sync is stalled. Commit any progress so far and remove this entry
+                        let ses = entry.remove();
+                        if let Some(trx) = ses.trx {
+                            self.imp.commit(trx).await?;
+                        }
                     }
                     // Otherwise, we wait for this sync to proceed
                     return Ok(());
@@ -197,10 +204,9 @@ where
 
     async fn process_response(&self, from: N::Addr, bytes: &[u8]) -> Result<()> {
         let mut sessions = self.sessions.lock().await;
-        let requester = &mut sessions
-            .get_mut(&from)
-            .ok_or(SyncError::SessionMismatch)?
-            .requester;
+        let req_session = &mut sessions.get_mut(&from).ok_or(SyncError::SessionMismatch)?;
+        req_session.last_seen = Instant::now();
+        let requester = &mut req_session.requester;
 
         let cmds = {
             let mut aranya = self.imp.get_client().await;
@@ -210,14 +216,16 @@ where
         };
         if let Some(cmds) = cmds {
             if !cmds.is_empty() {
-                let mut peer_caches = self.peer_caches.lock().await;
-                let peer_cache = peer_caches.entry(from).or_default();
-                self.imp.add_commands(&cmds, peer_cache).await?;
+                self.imp.add_commands(&cmds, &mut req_session.trx).await?;
             }
         } else {
             // We're done, destroy the requester
             log::info!("sync ended with {from}");
-            sessions.remove(&from);
+            // SAFETY: we know the session exists because we've been using it
+            let req_session = sessions.remove(&from).unwrap();
+            if let Some(trx) = req_session.trx {
+                self.imp.commit(trx).await?;
+            }
         }
 
         Ok(())
