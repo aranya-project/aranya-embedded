@@ -453,4 +453,16 @@ where
             header,
         )?))
     }
+
+    fn list(
+        &mut self,
+    ) -> Result<impl Iterator<Item = Result<GraphId, AranyaStorageError>>, AranyaStorageError> {
+        let header = fetch_header(&self.storage, self.base)
+            .map_err(log_error(AranyaStorageError::NoSuchStorage))?;
+        if let Some(graph_id) = header.graph_id {
+            Ok(alloc::vec![Ok(graph_id.into())].into_iter())
+        } else {
+            Ok(alloc::vec![].into_iter())
+        }
+    }
 }

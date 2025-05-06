@@ -1,7 +1,7 @@
 use alloc::vec;
 use alloc::{boxed::Box, vec::Vec};
 use aranya_crypto::Engine;
-use aranya_crypto::UserId;
+use aranya_crypto::DeviceId;
 use aranya_policy_vm::{Machine, Module};
 use aranya_runtime::{EngineError, PolicyId, VmEffect};
 use aranya_runtime::{FfiCallable, VmPolicy};
@@ -33,7 +33,7 @@ where
         let module: Module = rkyv::from_bytes::<Module, RancorError>(&vec)?;
         let machine = Machine::from_module(module)?;
         let ffis: Vec<Box<dyn FfiCallable<E> + Send + 'static>> = vec![Box::from(NullEnvelope {
-            user: UserId::default(),
+            user: DeviceId::default(),
         })];
         let policy = VmPolicy::new(machine, crypto_engine, ffis).expect("Could not load policy");
         Ok(EmbeddedEngine { policy })
