@@ -169,8 +169,8 @@ where
                     .await
                     .inspect_err(|e| log::error!("sync initiation: {e}"))
                     .ok();
-                Timer::after_millis(100).await;
             }
+            Timer::after_millis(100).await;
         }
     }
 

@@ -35,13 +35,13 @@
 
 use core::io::BorrowedBuf;
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_time::Timer;
-use esp_irda_transceiver::{IrdaTransceiver, UartError};
+use embassy_time::{Duration, Instant, Timer};
+use esp_irda_transceiver::{IrdaReceiver, IrdaTransceiver, IrdaTransmitter, UartError};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
@@ -65,12 +65,8 @@ const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if t
 const IR_PACKET_SIZE: usize =
     IR_MAGIC.len() + IR_HEADER_SIZE + IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD;
 
-/// UART speed
-const UART_BAUD_RATE: u64 = 115200;
-/// How long it takes to transmit one byte (10 bit times) in microseconds
-// This really should divide and take the ceiling but all we want is an upper bound and the
-// integer math is less troublesome in const context.
-const UART_BYTE_DELAY_US: u64 = 1000 * (1_000_000 / UART_BAUD_RATE) + 1;
+/// How long we should wait after the last received byte before we transmit
+const TRANSMIT_GUARD_DURATION: Duration = Duration::from_millis(1);
 
 /// The minimum time to wait between packets.
 const RANDOM_MIN: u32 = 25;
@@ -158,23 +154,28 @@ impl IrMessageReconstructor {
 
 /// `IrNetworkEngine` manages turning a message into a series of packets and back again.
 pub(crate) struct IrNetworkEngine<'a> {
-    irts: Mutex<IrdaTransceiver<'a>>,
+    irts_tx: Mutex<IrdaTransmitter<'a>>,
+    irts_rx: Mutex<IrdaReceiver<'a>>,
     my_address: u16,
     input_buf: Mutex<[u8; IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD]>,
     send_channel: Channel<IrPacket>,
     receive_channel: Channel<IrPacket>,
+    last_rx: AtomicU32,
 }
 
 impl<'o> IrNetworkEngine<'o> {
     /// Create a new `IrNetworkInterface`.
     fn new(mut irts: IrdaTransceiver<'o>, my_address: u16) -> IrNetworkEngine<'o> {
         irts.enable(true);
+        let (irts_tx, irts_rx) = irts.split();
         IrNetworkEngine {
-            irts: Mutex::new(irts),
+            irts_tx: Mutex::new(irts_tx),
+            irts_rx: Mutex::new(irts_rx),
             my_address,
             input_buf: Mutex::new([0u8; IR_CHUNK_SIZE + IR_CRC_SIZE + RAPTORQ_OVERHEAD]),
             send_channel: Channel::new(),
             receive_channel: Channel::new(),
+            last_rx: AtomicU32::new(0),
         }
     }
 
@@ -185,6 +186,15 @@ impl<'o> IrNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: IrPacket) -> Result<u16, IrError> {
+        // 
+        loop {
+            let last_rx = Instant::from_ticks(self.last_rx.load(Ordering::Relaxed) as u64);
+            if Instant::now() - last_rx < TRANSMIT_GUARD_DURATION {
+                Timer::at(last_rx + TRANSMIT_GUARD_DURATION).await;
+            } else {
+                break;
+            }
+        }
         let mut output_buf: [MaybeUninit<u8>; IR_PACKET_SIZE] =
             [MaybeUninit::uninit(); IR_PACKET_SIZE];
         let mut bb = BorrowedBuf::from(&mut output_buf[..]);
@@ -211,20 +221,21 @@ impl<'o> IrNetworkEngine<'o> {
             packet.message_seq,
             bb.filled().len()
         ); */
-        self.irts.lock().await.send(bb.filled()).await?;
+        self.irts_tx.lock().await.send(bb.filled()).await?;
         Ok(crc)
+    }
+
+    fn update_last_rx(&self) {
+        self.last_rx
+            .store(Instant::now().as_ticks() as u32, Ordering::Relaxed);
     }
 
     async fn wait_for_byte(&self) -> Result<u8, IrError> {
         let mut byte_buf = [0u8; 1];
 
-        loop {
-            let r = self.irts.lock().await.read(&mut byte_buf)?;
-            if r > 0 {
-                return Ok(byte_buf[0]);
-            }
-            Timer::after_micros(UART_BYTE_DELAY_US).await;
-        }
+        self.irts_rx.lock().await.read(&mut byte_buf).await?;
+        self.update_last_rx();
+        Ok(byte_buf[0])
     }
 
     /// Read data from the transceiver until we find a packet.
@@ -242,8 +253,9 @@ impl<'o> IrNetworkEngine<'o> {
                 input_buf[2] = self.wait_for_byte().await?;
             }
             let mut crc = CRC.digest();
-            let mut irts = self.irts.lock().await;
-            irts.read_all(&mut input_buf[0..IR_HEADER_SIZE]).await?;
+            let mut irts_rx = self.irts_rx.lock().await;
+            irts_rx.read_all(&mut input_buf[0..IR_HEADER_SIZE]).await?;
+            self.update_last_rx();
             crc.update(&input_buf[0..IR_HEADER_SIZE]);
             let (sender, chunk_seq, chunk_len, total_len) = {
                 let mut sc = SliceCursor::new(&input_buf[0..IR_HEADER_SIZE]);
@@ -271,8 +283,10 @@ impl<'o> IrNetworkEngine<'o> {
                 (sender, chunk_seq, chunk_len, total_len)
             };
 
-            irts.read_all(&mut input_buf[0..chunk_len + IR_CRC_SIZE])
+            irts_rx
+                .read_all(&mut input_buf[0..chunk_len + IR_CRC_SIZE])
                 .await?;
+            self.update_last_rx();
             let checksum =
                 u16::from_be_bytes(input_buf[chunk_len..chunk_len + 2].try_into().unwrap());
             crc.update(&input_buf[..chunk_len]);
