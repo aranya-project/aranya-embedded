@@ -114,8 +114,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-crypto"
-version = "0.2.1"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.5.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "buggy",
  "bytecheck",
@@ -136,8 +136,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-crypto-ffi"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -148,8 +148,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-device-ffi"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -219,8 +219,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-envelope-ffi"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -230,8 +230,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-idam-ffi"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -242,8 +242,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-perspective-ffi"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -251,8 +251,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ast"
-version = "0.1.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.4.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "bytecheck",
  "rkyv",
@@ -262,8 +262,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-compiler"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-policy-ast",
  "aranya-policy-lang",
@@ -276,8 +276,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-derive"
-version = "0.2.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.5.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-policy-lang",
  "prettyplease",
@@ -288,8 +288,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen"
-version = "0.3.1"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-policy-ifgen-macro",
  "aranya-policy-vm",
@@ -299,8 +299,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen-build"
-version = "0.1.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.4.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "anyhow",
  "aranya-policy-ast",
@@ -313,8 +313,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen-macro"
-version = "0.2.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.3.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -323,8 +323,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-lang"
-version = "0.1.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.4.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "anyhow",
  "aranya-policy-ast",
@@ -339,8 +339,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-module"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
@@ -352,8 +352,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-vm"
-version = "0.3.1"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
@@ -367,8 +367,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-runtime"
-version = "0.3.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#286483b6fdcd4c25c5c6358a2738c8496f671898"
+version = "0.7.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-wip#b006b9f6590afdefc4a18d0006818f0a48fabf71"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -1335,8 +1335,9 @@ dependencies = [
 [[package]]
 name = "esp-irda-transceiver"
 version = "0.2.0"
-source = "git+git+ssh://git@github.com/aranya-project/esp-irda-transceiver#1e5ab56dce37f35848b317c3ff1e8e394bac434a"
+source = "git+git+ssh://git@github.com/aranya-project/esp-irda-transceiver#db88bacbb1928b6e4e1302daf43b70f7155b7251"
 dependencies = [
+ "embassy-sync",
  "embedded-hal-async",
  "esp-hal",
  "esp32s3",
