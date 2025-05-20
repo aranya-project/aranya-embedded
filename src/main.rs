@@ -24,10 +24,21 @@ use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
+
+#[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
+
 use esp_storage::FlashStorage;
 use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
 use log::info;
+
+#[cfg(feature = "net-esp-now")]
+use esp_wifi::{
+    EspWifiController,
+    esp_now::{BROADCAST_ADDRESS, EspNowManager, EspNowReceiver, EspNowSender, PeerInfo},
+    init,
+};
+
 use net::NetworkEngine;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
@@ -131,6 +142,25 @@ async fn main(spawner: Spawner) {
             ))
             .expect("could not spawn WiFi syncer task");
         network_engines.push(engine);
+    }
+
+    #[cfg(feature = "net-esp-now")]
+    {
+        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+        let init = &*mk_static!(
+            EspWifiController<'static>,
+            init(
+                timer_g0.timer0,
+                rng,
+                peripherals.RADIO_CLK,
+            )
+            .unwrap()
+        );
+    
+        let wifi = peripherals.WIFI;
+        let esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
+        log::info!("esp-now version {}", esp_now.version().unwrap());
+    
     }
 
     #[cfg(feature = "net-irda")]

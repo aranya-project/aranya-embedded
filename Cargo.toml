@@ -63,6 +63,7 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
     "wifi",
     "esp-alloc",
     "log",
+    "esp-now"
 ], optional = true }
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "medium-ip",
@@ -109,7 +110,7 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-internal", "net-irda"]
+default = ["storage-internal", "net-irda", "net-esp-now"]
 
 storage-internal = [
     "dep:embedded-storage",
@@ -137,6 +138,11 @@ net-irda = [
     "dep:crc",
     "dep:esp-irda-transceiver",
     "dep:raptorq",
+]
+
+net-esp-now = [
+    "dep:esp-wifi",
+    "dep:embassy-net",
 ]
 
 [profile.dev]
