@@ -1,5 +1,6 @@
 pub mod irda;
 pub mod wifi;
+pub mod espnow;
 
 #[cfg(not(any(feature = "net-wifi", feature = "net-irda", feature = "net-esp-now")))]
 compile_error!("One of \"net-wifi\" or \"net-irda\" must be enabled");

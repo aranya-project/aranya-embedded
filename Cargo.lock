@@ -173,6 +173,7 @@ dependencies = [
  "aranya-policy-lang",
  "aranya-policy-vm",
  "aranya-runtime",
+ "cfg-if",
  "crc",
  "critical-section",
  "edge-dhcp",

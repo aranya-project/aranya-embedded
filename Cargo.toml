@@ -91,6 +91,7 @@ crc = { version = "3.2", optional = true }
 # Dep is not yet public
 esp-irda-transceiver = { git = "git+ssh://git@github.com/aranya-project/esp-irda-transceiver", optional = true }
 raptorq = { version = "2", default-features = false, optional = true }
+cfg-if = "1.0.0"
 
 [build-dependencies]
 ron = "0.8.1"
@@ -143,6 +144,8 @@ net-irda = [
 net-esp-now = [
     "dep:esp-wifi",
     "dep:embassy-net",
+    "dep:raptorq",
+    "dep:crc",
 ]
 
 [profile.dev]

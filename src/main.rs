@@ -14,9 +14,12 @@ mod storage;
 mod util;
 
 use aranya::daemon::{Daemon, Imp};
+
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
-use embassy_time::{Duration, TimeoutError, Timer};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
+use embassy_time::{Duration, TimeoutError, Timer, Ticker};
+
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{GpioPin, Input, Pull};
@@ -27,6 +30,7 @@ use esp_hal_embassy::{main, InterruptExecutor};
 
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
+
 
 use esp_storage::FlashStorage;
 use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
@@ -161,6 +165,37 @@ async fn main(spawner: Spawner) {
         let esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
         log::info!("esp-now version {}", esp_now.version().unwrap());
     
+        let (manager, sender, receiver) = esp_now.split();
+        let manager: &'static mut EspNowManager<'static> = mk_static!(EspNowManager<'static>, manager);
+        let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
+        
+        let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
+        
+        let engine = net::espnow::start(sender, receiver, p.address);
+
+    
+        /*
+        let mut ticker = Ticker::every(Duration::from_millis(500));
+        loop {
+            ticker.next().await;
+            let peer = match manager.fetch_peer(false) {
+                Ok(peer) => peer,
+                Err(_) => {
+                    if let Ok(peer) = manager.fetch_peer(true) {
+                        peer
+                    } else {
+                        continue;
+                    }
+                }
+            };
+    
+            log::info!("Send hello to peer {:?}", peer.peer_address);
+            let mut sender = sender.lock().await;
+            let status = sender.send_async(&peer.peer_address, b"Hello Peer.").await;
+            log::info!("Send hello status: {:?}", status);
+        }
+        */
+
     }
 
     #[cfg(feature = "net-irda")]
