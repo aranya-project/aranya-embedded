@@ -26,6 +26,7 @@
 //! 
 
 
+use esp_hal::gpio::Input;
 use esp_wifi::esp_now::{BROADCAST_ADDRESS, EspNowReceiver, EspNowSender};
 
 use core::io::BorrowedBuf;
@@ -230,21 +231,23 @@ impl<'o> EspNowNetworkEngine<'o> {
 
         loop {
             let received = self.receiver.lock().await.receive_async().await;
-            let input_buf = received.data();
+            let receive_data = received.data();
+            log::debug!("EspNow: reseave info {:?}", received.info);
 
-            if input_buf[0..3] != ESP_NOW_MAGIC {
+            if receive_data[0..3] != ESP_NOW_MAGIC {
+                log::debug!("EspNow: magic did not match {:?}", &receive_data[0..3]);
                 continue;
             }
 
+            let input_buf = &receive_data[3..];
             let mut crc = CRC.digest();
             self.update_last_rx();
             crc.update(&input_buf[0..ESP_NOW_HEADER_SIZE]);
-
             let (sender, chunk_seq, chunk_len, total_len) = {
                 let mut sc = SliceCursor::new(&input_buf[0..ESP_NOW_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
                 if recipient != self.my_address {
-                    log::debug!(
+                    log::info!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
                         recipient
@@ -255,7 +258,7 @@ impl<'o> EspNowNetworkEngine<'o> {
                 let chunk_seq = sc.next_u8();
                 let chunk_len = sc.next_u16_be() as usize;
                 if chunk_len > ESP_NOW_CHUNK_SIZE + RAPTORQ_OVERHEAD {
-                    log::debug!("recv_packet: malformed chunk of size {chunk_len}");
+                    log::info!("recv_packet: malformed chunk of size {chunk_len}");
                     continue;
                 }
                 let total_len = sc.next_u16_be();
@@ -266,6 +269,7 @@ impl<'o> EspNowNetworkEngine<'o> {
                 (sender, chunk_seq, chunk_len, total_len)
             };
 
+            let input_buf = &input_buf[ESP_NOW_HEADER_SIZE..];
             self.update_last_rx();
             let checksum =
                 u16::from_be_bytes(input_buf[chunk_len..chunk_len + 2].try_into().unwrap());
@@ -298,13 +302,16 @@ impl<'o> EspNowNetworkEngine<'o> {
 
     async fn run_sender(&self) -> ! {
         loop {
+            log::debug!("EspNow: Waiting for Packet");
             let packet = self.send_channel.receive().await;
+            log::debug!("EspNow: Got Packet");
+
             match self.send_packet(packet).await {
                 Ok(crc) => {
                     Timer::after_millis(Self::random_delay(crc) as u64).await;
                 }
                 Err(e) => {
-                    log::error!("ir send error: {e}");
+                    log::error!("EspNow: send error: {e}");
                     Timer::after_millis(SEND_RETRY_DELAY_MS).await;
                 }
             }
@@ -316,7 +323,7 @@ impl<'o> EspNowNetworkEngine<'o> {
             match self.recv_packet().await {
                 Ok(packet) => self.receive_channel.send(packet).await,
                 Err(e) => {
-                    log::error!("esp_now recv error: {e}");
+                    log::error!("EspNow: recv error: {e}");
                 }
             }
         }
@@ -324,7 +331,7 @@ impl<'o> EspNowNetworkEngine<'o> {
 }
 
 #[embassy_executor::task]
-async fn run_ir_engine(engine: &'static EspNowNetworkEngine<'static>) -> ! {
+async fn run_esp_now_engine(engine: &'static EspNowNetworkEngine<'static>) -> ! {
     embassy_futures::join::join(engine.run_receiver(), engine.run_sender()).await;
     // This tells the compiler to not worry about the return type
     unreachable!();
@@ -333,7 +340,7 @@ async fn run_ir_engine(engine: &'static EspNowNetworkEngine<'static>) -> ! {
 impl NetworkEngine for EspNowNetworkEngine<'_> {
     fn run(&'static self, spawner: embassy_executor::Spawner) -> Result<(), NetworkError> {
         spawner
-            .spawn(run_ir_engine(self))
+            .spawn(run_esp_now_engine(self))
             .expect("could not spawn IR receiver");
         Ok(())
     }
@@ -364,7 +371,10 @@ impl EspNowNetworkInterface<'_> {
                 total_len: total_len as u16,
                 contents: enc_packet.into_iter().collect(),
             };
+            log::debug!("EspNow: Sending Packet");
             self.send_tx.send(packet).await;
+            log::debug!("EspNow: Sent Packet");
+
         }
         Ok(())
     }
@@ -372,7 +382,10 @@ impl EspNowNetworkInterface<'_> {
     /// Read packets until we assemble a message, then return it
     async fn recv(&self) -> Result<Message<u16>, EspNowError> {
         loop {
+            log::debug!("EspNow: Waiting for Packet");
             let packet = self.receive_rx.receive().await;
+            log::debug!("EspNow: Received Packet");
+
             let sender = packet.sender;
             let recipient = packet.recipient;
             let mut reconstructors = self.reconstructors.lock().await;
@@ -396,7 +409,7 @@ impl NetworkInterface for EspNowNetworkInterface<'_> {
     async fn send_message(&self, msg: Message<u16>) -> Result<(), NetworkError> {
         match self.send(msg).await {
             Ok(_) => (),
-            Err(e) => log::error!("ir send: {e}"),
+            Err(e) => log::error!("esp now send: {e}"),
         }
         Ok(())
     }

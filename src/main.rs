@@ -62,7 +62,8 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timer_g1.timer0);
 
     // Initialize heaps
-    esp_alloc::heap_allocator!(64 * 1024);
+    //esp_alloc::heap_allocator!(64 * 1024);
+    esp_alloc::heap_allocator!(96 * 1024);
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     esp_println::logger::init_logger_from_env();
@@ -70,7 +71,7 @@ async fn main(spawner: Spawner) {
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
-    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
         .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
@@ -95,7 +96,7 @@ async fn main(spawner: Spawner) {
     );
 
     let mut parameters = ParameterStore::new(io);
-    let p = match parameters.fetch() {
+    let parameter_values = match parameters.fetch() {
         Ok(p) => p,
         Err(e) => match e {
             ParameterStoreError::Corrupt => {
@@ -107,13 +108,13 @@ async fn main(spawner: Spawner) {
             e => panic!("{e}"),
         },
     };
-    log::info!("p: {p:?}");
+    log::info!("p: {parameter_values:?}");
 
     let mut daemon = Daemon::init(storage_provider)
         .await
         .expect("could not create daemon");
 
-    let graph_id = match p.graph_id {
+    let graph_id = match parameter_values.graph_id {
         None => {
             let graph_id = daemon.create_team().await.expect("could not create team");
             parameters
@@ -168,34 +169,20 @@ async fn main(spawner: Spawner) {
         let (manager, sender, receiver) = esp_now.split();
         let manager: &'static mut EspNowManager<'static> = mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
-        
+
         let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
         
-        let engine = net::espnow::start(sender, receiver, p.address);
+        let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
 
-    
-        /*
-        let mut ticker = Ticker::every(Duration::from_millis(500));
-        loop {
-            ticker.next().await;
-            let peer = match manager.fetch_peer(false) {
-                Ok(peer) => peer,
-                Err(_) => {
-                    if let Ok(peer) = manager.fetch_peer(true) {
-                        peer
-                    } else {
-                        continue;
-                    }
-                }
-            };
-    
-            log::info!("Send hello to peer {:?}", peer.peer_address);
-            let mut sender = sender.lock().await;
-            let status = sender.send_async(&peer.peer_address, b"Hello Peer.").await;
-            log::info!("Send hello status: {:?}", status);
+        spawner.must_spawn(aranya::syncer::sync_esp_now(
+            daemon.get_imp(graph_id, NeopixelSink::new()),
+            engine.interface(),
+            parameter_values.peers.clone(),
+        ));
+
+        if network_engines.push(engine).is_err() {
+            log::info!("could not start ESP Now network engine");
         }
-        */
-
     }
 
     #[cfg(feature = "net-irda")]
@@ -206,11 +193,11 @@ async fn main(spawner: Spawner) {
             peripherals.GPIO38,
             peripherals.GPIO8,
         );
-        let engine = net::irda::start(irts, p.address).await;
+        let engine = net::irda::start(irts, parameter_values.address).await;
         spawner.must_spawn(aranya::syncer::sync_irda(
             daemon.get_imp(graph_id, NeopixelSink::new()),
             engine.interface(),
-            p.peers.clone(),
+            parameter_values.peers.clone(),
         ));
         if network_engines.push(engine).is_err() {
             log::info!("could not start IR network engine");
@@ -249,11 +236,11 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(button_task(
         peripherals.GPIO0,
         daemon.get_imp(graph_id, NeopixelSink::new()),
-        p.color,
+        parameter_values.color,
         parameters,
     ));
 
-    spawner.must_spawn(led_task(neopixel, p.color));
+    spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
 }
