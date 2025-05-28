@@ -43,13 +43,13 @@ use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
 use crate::mk_static;
 use crate::util::SliceCursor;
 
-const IR_PACKET_QUEUE_SIZE: usize = 2;
+const ESP_NOW_PACKET_QUEUE_SIZE: usize = 2;
 type Mutex<T> = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>;
-type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
+type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
 type Sender<'a, T> =
-    embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
+    embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
 type Receiver<'a, T> =
-    embassy_sync::channel::Receiver<'a, CriticalSectionRawMutex, T, IR_PACKET_QUEUE_SIZE>;
+    embassy_sync::channel::Receiver<'a, CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
 
 const CRC: Crc<u16> = Crc::<u16>::new(&crc::CRC_16_XMODEM); // XMODEM seems appropriate. :D
 const ESP_NOW_MAGIC: [u8; 3] = [0xF0, 0x0F, 0xF0];
@@ -57,7 +57,7 @@ const ESP_NOW_CHUNK_SIZE: usize = 64; // needs to be less than 65536 because thi
 const ESP_NOW_HEADER_SIZE: usize = 9; // recipient, sender, chunk_seq, chunk_len, total_len
 const ESP_NOW_CRC_SIZE: usize = (CRC.algorithm.width / 8) as usize;
 const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if there's a way to ask raptorq for this
-const IR_PACKET_SIZE: usize =
+const ESP_NOW_PACKET_SIZE: usize =
     ESP_NOW_MAGIC.len() + ESP_NOW_HEADER_SIZE + ESP_NOW_CHUNK_SIZE + ESP_NOW_CRC_SIZE + RAPTORQ_OVERHEAD;
 
 /// How long we should wait after the last received byte before we transmit
@@ -77,7 +77,7 @@ pub enum EspNowError {
     EspNow,
 }
 
-/// `EspNowPacket` is one link-layer packet on the IR interface
+/// `EspNowPacket` is one link-layer packet on the ESP Now interface
 pub struct EspNowPacket {
     /// Recipient address.
     pub recipient: u16,
@@ -97,7 +97,7 @@ pub struct EspNowPacket {
     pub contents: heapless::Vec<u8, { ESP_NOW_CHUNK_SIZE + RAPTORQ_OVERHEAD }>,
 }
 
-/// An IrMessageReconstructor consumes a series of packets to reconstruct the message
+/// An EspNowMessageReconstructor consumes a series of packets to reconstruct the message
 /// encoded within.
 pub struct EspNowMessageReconstructor {
     decoder: raptorq::Decoder,
@@ -133,7 +133,7 @@ impl EspNowMessageReconstructor {
             log::info!(
                 "reconstructor reset with {}/{} est. packets",
                 self.packets_recvd,
-                (self.total_len - 1) / 64 + 1
+                (self.total_len - 1) / ESP_NOW_CHUNK_SIZE as u16 + 1
             );
             *self = EspNowMessageReconstructor::new(&packet);
         } else if self.finished {
@@ -147,12 +147,12 @@ impl EspNowMessageReconstructor {
     }
 }
 
-/// `IrNetworkEngine` manages turning a message into a series of packets and back again.
+/// `EspNowNetworkEngine` manages turning a message into a series of packets and back again.
 pub(crate) struct EspNowNetworkEngine<'a> {
     sender:  Mutex<EspNowSender<'a>>,
     receiver: Mutex<EspNowReceiver<'a>>,
     my_address: u16,
-    input_buf: Mutex<[u8; ESP_NOW_CHUNK_SIZE + ESP_NOW_CRC_SIZE + RAPTORQ_OVERHEAD]>,
+    input_buf: Mutex<[u8; ESP_NOW_PACKET_SIZE]>,
     send_channel: Channel<EspNowPacket>,
     receive_channel: Channel<EspNowPacket>,
     last_rx: AtomicU32,
@@ -169,7 +169,7 @@ impl<'o> EspNowNetworkEngine<'o> {
             sender,
             receiver,
             my_address,
-            input_buf: Mutex::new([0u8; ESP_NOW_CHUNK_SIZE + ESP_NOW_CRC_SIZE + RAPTORQ_OVERHEAD]),
+            input_buf: Mutex::new([0u8; ESP_NOW_PACKET_SIZE]),
             send_channel: Channel::new(),
             receive_channel: Channel::new(),
             last_rx: AtomicU32::new(0),
@@ -192,12 +192,12 @@ impl<'o> EspNowNetworkEngine<'o> {
                 break;
             }
         }
-        let mut output_buf: [MaybeUninit<u8>; IR_PACKET_SIZE] =
-            [MaybeUninit::uninit(); IR_PACKET_SIZE];
+        let mut output_buf: [MaybeUninit<u8>; ESP_NOW_PACKET_SIZE] =
+            [MaybeUninit::uninit(); ESP_NOW_PACKET_SIZE];
         let mut bb = BorrowedBuf::from(&mut output_buf[..]);
         {
             let mut bc = bb.unfilled();
-            // SAFETY: This shouldn't overflow as we should be writing at most `IR_PACKET_SIZE`
+            // SAFETY: This shouldn't overflow as we should be writing at most `ESP_NOW_PACKET_SIZE`
             // bytes.
             bc.append(&ESP_NOW_MAGIC);
             bc.append(&u16::to_be_bytes(packet.recipient));
@@ -341,7 +341,7 @@ impl NetworkEngine for EspNowNetworkEngine<'_> {
     fn run(&'static self, spawner: embassy_executor::Spawner) -> Result<(), NetworkError> {
         spawner
             .spawn(run_esp_now_engine(self))
-            .expect("could not spawn IR receiver");
+            .expect("could not spawn ESP Now receiver");
         Ok(())
     }
 }
@@ -371,9 +371,9 @@ impl EspNowNetworkInterface<'_> {
                 total_len: total_len as u16,
                 contents: enc_packet.into_iter().collect(),
             };
-            log::debug!("EspNow: Sending Packet");
+            log::info!("EspNow: Sending Packet");
             self.send_tx.send(packet).await;
-            log::debug!("EspNow: Sent Packet");
+            log::info!("EspNow: Sent Packet");
 
         }
         Ok(())
@@ -428,7 +428,7 @@ impl NetworkInterface for EspNowNetworkInterface<'_> {
 }
 
 
-/// Starts the IR networking engine and returns and interface to it.
+/// Starts the Esp Now networking engine and returns and interface to it.
 pub(crate) async fn start(
     sender: Mutex<EspNowSender<'static>>,
     receiver: Mutex<EspNowReceiver<'static>>,
