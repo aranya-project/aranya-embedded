@@ -111,7 +111,10 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-internal", "net-irda", "net-esp-now"]
+default = ["storage-internal", "net-esp-now", "qtpy-s3"]
+
+qtpy-s3 = []
+feather-dev = []
 
 storage-internal = [
     "dep:embedded-storage",

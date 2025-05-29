@@ -31,7 +31,6 @@ use esp_hal_embassy::{main, InterruptExecutor};
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
 
-
 use esp_storage::FlashStorage;
 use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
 use log::info;
@@ -70,8 +69,18 @@ async fn main(spawner: Spawner) {
     info!("Embassy initialized!");
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+    #[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
+    compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
 
+    #[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
+    compile_error!("One of qtpy-s3 or feather-dev must be enabled");
+
+    #[cfg(feature = "qtpy-s3")]
     let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
+        .expect("could not initialize neopixel");
+
+    #[cfg(feature = "feather-dev")]
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
         .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
