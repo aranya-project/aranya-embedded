@@ -3,13 +3,13 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 
-use aranya_crypto::UserId;
+use aranya_crypto::DeviceId;
 use aranya_policy_vm::{ffi::ffi, CommandContext, MachineError};
 use aranya_runtime::CommandId;
 
 /// An Envelope that does no crypto
 pub struct NullEnvelope {
-    pub user: UserId,
+    pub user: DeviceId,
 }
 
 #[ffi(
@@ -41,7 +41,7 @@ impl NullEnvelope {
         #[derive(serde::Serialize)]
         struct HashedFields<'a> {
             parent_id: CommandId,
-            author_id: UserId,
+            author_id: DeviceId,
             payload: &'a [u8],
         }
 

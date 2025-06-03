@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use aranya_runtime::Sink;
+use aranya_runtime::{Sink, VmEffect};
 
 /// Holds a collection of effect data.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -35,4 +35,24 @@ impl<E> Sink<E> for VecSink<E> {
     fn rollback(&mut self) {}
 
     fn commit(&mut self) {}
+}
+
+pub struct DebugSink {}
+
+impl Sink<VmEffect> for DebugSink {
+    fn begin(&mut self) {
+        log::info!("DebugSink begin");
+    }
+
+    fn consume(&mut self, effect: VmEffect) {
+        log::info!("DebugSink consume {effect}");
+    }
+
+    fn rollback(&mut self) {
+        log::info!("DebugSink rollback");
+    }
+
+    fn commit(&mut self) {
+        log::info!("DebugSink commit");
+    }
 }

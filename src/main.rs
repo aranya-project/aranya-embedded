@@ -13,14 +13,42 @@ mod net;
 mod storage;
 mod util;
 
-use aranya::daemon::Daemon;
+use aranya::daemon::{Daemon, Imp};
+
+use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
+use embassy_time::{Duration, TimeoutError, Timer, Ticker};
+
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
+use esp_hal::gpio::{GpioPin, Input, Pull};
+use esp_hal::interrupt::software::SoftwareInterruptControl;
+use esp_hal::interrupt::Priority;
 use esp_hal::timer::timg::TimerGroup;
-use esp_hal_embassy::main;
+use esp_hal_embassy::{main, InterruptExecutor};
+
+#[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
+
+use esp_storage::FlashStorage;
+use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
 use log::info;
+
+#[cfg(feature = "net-esp-now")]
+use esp_wifi::{
+    EspWifiController,
+    esp_now::{BROADCAST_ADDRESS, EspNowManager, EspNowReceiver, EspNowSender, PeerInfo},
+    init,
+};
+
+use net::NetworkEngine;
+use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
+use static_cell::StaticCell;
+
+const MAX_NETWORK_ENGINES: usize = 2;
+
+//static NET_STACK: StaticCell<Stack<8192>> = StaticCell::new();
 
 #[main]
 async fn main(spawner: Spawner) {
@@ -33,15 +61,27 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timer_g1.timer0);
 
     // Initialize heaps
-    esp_alloc::heap_allocator!(64 * 1024);
+    //esp_alloc::heap_allocator!(64 * 1024);
+    esp_alloc::heap_allocator!(96 * 1024);
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
-    tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+    //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+    #[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
+    compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
 
-    let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+    #[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
+    compile_error!("One of qtpy-s3 or feather-dev must be enabled");
+
+    #[cfg(feature = "qtpy-s3")]
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
+        .expect("could not initialize neopixel");
+
+    #[cfg(feature = "feather-dev")]
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
+        .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
     let storage_provider = storage::internal::init().expect("couldn't get storage");
@@ -58,20 +98,50 @@ async fn main(spawner: Spawner) {
     .await
     .expect("couldn't get storage");
 
+    #[cfg(feature = "storage-internal")]
+    let io = EmbeddedStorageIO::new(
+        FlashStorage::new(),
+        0x9000, /* TODO(chip): get this from the partition table */
+    );
+
+    let mut parameters = ParameterStore::new(io);
+    let parameter_values = match parameters.fetch() {
+        Ok(p) => p,
+        Err(e) => match e {
+            ParameterStoreError::Corrupt => {
+                log::info!("Parameters corrupt; writing defaults");
+                parameters
+                    .store(&Parameters::default())
+                    .expect("could not store parameters")
+            }
+            e => panic!("{e}"),
+        },
+    };
+    log::info!("p: {parameter_values:?}");
+
     let mut daemon = Daemon::init(storage_provider)
         .await
         .expect("could not create daemon");
-    let graph_id = daemon.create_team().await.expect("could not create team");
-    log::info!("Created graph - {graph_id}");
 
-    daemon
-        .set_led(graph_id, 0, 255, 255)
-        .await
-        .expect("could not set LED");
+    let graph_id = match parameter_values.graph_id {
+        None => {
+            let graph_id = daemon.create_team().await.expect("could not create team");
+            parameters
+                .update(|p| p.graph_id = Some(graph_id))
+                .expect("could not store parameters");
+            log::info!("Created graph - {graph_id}");
+            graph_id
+        }
+        Some(a) => a,
+    };
+
+    let mut network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES> =
+        heapless::Vec::new();
 
     #[cfg(feature = "net-wifi")]
     {
-        let network = net::wifi::start(
+        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+        let engine = net::wifi::start(
             peripherals.WIFI,
             peripherals.RADIO_CLK,
             timer_g1.timer1,
@@ -80,8 +150,48 @@ async fn main(spawner: Spawner) {
         )
         .await;
         spawner
-            .spawn(aranya::syncer::sync_wifi(daemon.get_client(), network))
+            .spawn(aranya::syncer::sync_wifi(
+                daemon.get_client(),
+                engine.interface(),
+            ))
             .expect("could not spawn WiFi syncer task");
+        network_engines.push(engine);
+    }
+
+    #[cfg(feature = "net-esp-now")]
+    {
+        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+        let init = &*mk_static!(
+            EspWifiController<'static>,
+            init(
+                timer_g0.timer0,
+                rng,
+                peripherals.RADIO_CLK,
+            )
+            .unwrap()
+        );
+    
+        let wifi = peripherals.WIFI;
+        let esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
+        log::info!("esp-now version {}", esp_now.version().unwrap());
+    
+        let (manager, sender, receiver) = esp_now.split();
+        let manager: &'static mut EspNowManager<'static> = mk_static!(EspNowManager<'static>, manager);
+        let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
+
+        let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
+        
+        let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
+
+        spawner.must_spawn(aranya::syncer::sync_esp_now(
+            daemon.get_imp(graph_id, NeopixelSink::new()),
+            engine.interface(),
+            parameter_values.peers.clone(),
+        ));
+
+        if network_engines.push(engine).is_err() {
+            log::info!("could not start ESP Now network engine");
+        }
     }
 
     #[cfg(feature = "net-irda")]
@@ -92,17 +202,133 @@ async fn main(spawner: Spawner) {
             peripherals.GPIO38,
             peripherals.GPIO8,
         );
-        let my_address = match option_env!("IR_ADDRESS") {
-            Some(v) => v.parse::<u16>().expect("IR_ADDRESS must be an integer"),
-            None => 0, // just a default for testing
-        };
-        let network = net::irda::start(irts, my_address).await;
-        spawner
-            .spawn(aranya::syncer::sync_irda(daemon.get_client(), network))
-            .expect("could not spawn IrDA syncer task");
+        let engine = net::irda::start(irts, parameter_values.address).await;
+        spawner.must_spawn(aranya::syncer::sync_irda(
+            daemon.get_imp(graph_id, NeopixelSink::new()),
+            engine.interface(),
+            parameter_values.peers.clone(),
+        ));
+        if network_engines.push(engine).is_err() {
+            log::info!("could not start IR network engine");
+        }
     }
 
-    spawner.spawn(heap_report()).ok();
+    /* TODO(chip): re-enable this when esp-storage works multi-core
+    // Spawn a task on the second CPU to run the network engines
+    let mut cpu_control = CpuControl::new(peripherals.CPU_CTRL);
+    let stack = NET_STACK.init(Stack::new());
+    let app_core_guard = cpu_control
+        .start_app_core(stack, move || {
+            static EXECUTOR: StaticCell<Executor> = StaticCell::new();
+            let executor = EXECUTOR.init(Executor::new());
+            executor.run(|spawner| {
+                spawner
+                    .spawn(net_task(spawner, network_engines))
+                    .expect("could not spawn net task");
+            })
+        })
+        .expect("could not start on second core");
+    // Don't drop the guard so we don't stop the second core
+    core::mem::forget(app_core_guard);
+    */
+
+    // Spawn a high priority InterruptExecutor to run the network engines
+    {
+        let sw_ints = SoftwareInterruptControl::new(peripherals.SW_INTERRUPT);
+        static EXECUTOR: StaticCell<InterruptExecutor<2>> = StaticCell::new();
+        let executor = InterruptExecutor::new(sw_ints.software_interrupt2);
+        let executor = EXECUTOR.init(executor);
+        let spawner = executor.start(Priority::Priority3);
+        spawner.must_spawn(net_task(network_engines));
+    }
+
+    spawner.must_spawn(button_task(
+        peripherals.GPIO0,
+        daemon.get_imp(graph_id, NeopixelSink::new()),
+        parameter_values.color,
+        parameters,
+    ));
+
+    spawner.must_spawn(led_task(neopixel, parameter_values.color));
+
+    spawner.must_spawn(heap_report());
+}
+
+#[embassy_executor::task]
+async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>) {
+    log::info!("net task started");
+
+    let spawner = Spawner::for_current_executor().await;
+    for e in network_engines {
+        e.run(spawner).expect("could not start engine {e}");
+    }
+}
+
+#[embassy_executor::task]
+async fn button_task(
+    pin: GpioPin<0>,
+    imp: Imp<NeopixelSink>,
+    color: RgbU8,
+    mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
+) {
+    let mut driver = Input::new(pin, Pull::Up);
+    loop {
+        driver.wait_for_falling_edge().await;
+        match embassy_time::with_timeout(Duration::from_secs(5), driver.wait_for_high()).await {
+            Ok(_) => {
+                log::info!("led pressed");
+                match imp
+                    .call_action(vm_action!(set_led(
+                        color.red as i64,
+                        color.green as i64,
+                        color.blue as i64
+                    )))
+                    .await
+                {
+                    Ok(_) => (),
+                    Err(e) => log::error!("could not set LED: {e}"),
+                };
+            }
+            Err(TimeoutError) => {
+                // Button has been held for five seconds; DESTROY THE WORLD
+                parameters.update(|p| p.graph_id = None).ok();
+                #[cfg(feature = "storage-internal")]
+                storage::internal::nuke().expect("could not nuke!?");
+                log::info!("Storage nuked. Release button to reset.");
+                log::info!("");  // Sometimes espflash doesn't flush the last line so the message isn't visible.
+                // wait for the button to go high so we don't accidentally wind up in the
+                // firmware loader. But do it in a busy loop so we don't yield to any other
+                // async tasks.
+                while driver.is_low() {}
+                esp_hal::reset::software_reset();
+            }
+        }
+    }
+}
+
+#[embassy_executor::task]
+async fn led_task(mut neopixel: Neopixel<'static>, initial_color: RgbU8) {
+    let mut intensity = 1.0;
+    let mut color = initial_color;
+    loop {
+        match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
+            Ok(c) => {
+                color = c;
+                intensity = 1.0;
+            }
+            Err(TimeoutError) => intensity -= (intensity - 0.3) / 5.0,
+        };
+        let effective_color = color * intensity;
+        log::trace!("effective color: {effective_color:?} (intensity {intensity:04})");
+        neopixel
+            .set_color(
+                effective_color.red,
+                effective_color.green,
+                effective_color.blue,
+            )
+            .inspect_err(|e| log::error!("neopixel: {e}"))
+            .ok();
+    }
 }
 
 #[embassy_executor::task]
@@ -110,6 +336,6 @@ async fn heap_report() {
     loop {
         let stats = esp_alloc::HEAP.stats();
         log::info!("{}", stats);
-        embassy_time::Timer::after_secs(10).await;
+        Timer::after_secs(10).await;
     }
 }

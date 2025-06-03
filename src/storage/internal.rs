@@ -76,7 +76,7 @@ where
     if buf[0..HEADER_MAGIC.len()] != HEADER_MAGIC {
         return Err(StorageError::BadHeader);
     }
-    log::info!("magic OK");
+    log::debug!("magic OK");
     let header =
         rkyv::access::<ArchivedEspStorageHeader, rancor::Error>(&buf[HEADER_MAGIC.len()..])
             .map_err(|_| StorageError::BadHeader)?;
@@ -97,6 +97,7 @@ where
     buf.extend_from_slice(&HEADER_MAGIC);
     buf.extend_from_slice(&rkyv::to_bytes::<rancor::Error>(header)?);
 
+    log::debug!("write header @{offset:08X}");
     storage
         .lock(|storage| storage.borrow_mut().write(offset, &buf))
         .map_err(|_| StorageError::Write)?;
@@ -109,16 +110,23 @@ pub fn init() -> Result<LinearStorageProvider<EspPartitionIoManager<FlashStorage
     let mut storage = FlashStorage::new();
     let data_partition = find_data_partition(&mut storage)?;
 
-    // hack for testing. 0x180000 is the start of our data partition, and this zeroes the header so that
-    // it recreates the internal linear storage.
-    storage
-        .write(0x180000, &[0u8; 0x1000])
-        .expect("could not erase flash");
-
     Ok(LinearStorageProvider::new(EspPartitionIoManager::new(
         storage,
         data_partition,
     )))
+}
+
+// Destroy this storage by erasing the header block
+pub fn nuke() -> Result<(), StorageError> {
+    let mut storage = FlashStorage::new();
+    let data_partition = find_data_partition(&mut storage)?;
+    storage
+        .write(
+            data_partition.offset,
+            &[0u8; FlashStorage::SECTOR_SIZE as usize],
+        )
+        .map_err(storage_error)?;
+    Ok(())
 }
 
 pub struct Reader<S>
@@ -196,14 +204,14 @@ where
             .map_err(log_error(AranyaStorageError::IoError))?;
 
         log::debug!("Fetching segment @ {offset}, len {data_size}");
-        log::debug!("  header bytes: {:?}", &segment_header);
+        log::trace!("  header bytes: {:?}", &segment_header);
         // SAFETY: the box is zeroed before we `assume_init()`
         let mut byte_buf = unsafe { Box::new_zeroed_slice(data_size).assume_init() };
         let read_pos = read_pos + (MAGIC_LEN + SEGMENT_HEADER_SIZE) as u32;
         self.storage
             .lock(|s| s.borrow_mut().read(read_pos, &mut byte_buf))
             .map_err(storage_error)?;
-        log::debug!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
+        log::trace!("  {} data bytes: {:?}", byte_buf.len(), &byte_buf);
         postcard::from_bytes(&byte_buf).map_err(log_error(AranyaStorageError::IoError))
     }
 }
@@ -313,13 +321,14 @@ where
             })
             .map_err(log_error(AranyaStorageError::IoError))?,
         );
-        log::debug!("  header bytes: {:?}", &disk_bytes);
-        log::debug!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
+        log::trace!("  header bytes: {:?}", &disk_bytes);
+        log::trace!("  {} data bytes: {:?}", item_bytes.len(), &item_bytes);
 
         disk_bytes.append(&mut item_bytes);
         assert_eq!(disk_bytes.len(), item_size);
 
         let write_pos = self.base + DATA_OFFSET + offset as u32;
+        log::debug!("write segment @{write_pos:08X}");
         self.storage
             .lock(|storage| storage.borrow_mut().write(write_pos, &disk_bytes))
             .map_err(storage_error)?;
@@ -443,5 +452,17 @@ where
             self.size,
             header,
         )?))
+    }
+
+    fn list(
+        &mut self,
+    ) -> Result<impl Iterator<Item = Result<GraphId, AranyaStorageError>>, AranyaStorageError> {
+        let header = fetch_header(&self.storage, self.base)
+            .map_err(log_error(AranyaStorageError::NoSuchStorage))?;
+        if let Some(graph_id) = header.graph_id {
+            Ok(alloc::vec![Ok(graph_id.into())].into_iter())
+        } else {
+            Ok(alloc::vec![].into_iter())
+        }
     }
 }

@@ -1,3 +1,5 @@
+use core::ops::DerefMut;
+
 use alloc::sync::Arc;
 use aranya_crypto::{
     aead::{Aead, AeadKey},
@@ -6,11 +8,15 @@ use aranya_crypto::{
     keystore::memstore::MemStore,
     CipherSuite,
 };
-use aranya_runtime::{linear::LinearStorageProvider, vm_action, ClientState, GraphId};
+use aranya_runtime::{
+    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, Sink, Transaction,
+    VmEffect,
+};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
 use crate::storage::imp::*;
 
-use super::{engine::EmbeddedEngine, error::*, sink::VecSink};
+use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
 
 // Use short names so we can more easily add generics.
 /// CE = Crypto Engine
@@ -32,7 +38,8 @@ pub(crate) type Client = ClientState<PE, SP>;
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
 
-type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;
+type Mutex<T> =
+    embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
 
 // TODO(chip): use actual keys
 const NULL_KEY: [u8; 32] = [0u8; 32];
@@ -58,7 +65,7 @@ impl Daemon {
     }
 
     pub async fn create_team(&mut self) -> Result<GraphId> {
-        let mut sink = VecSink::new();
+        let mut sink = DebugSink {};
 
         // Temporarily fix the nonce for demo purposes, TODO(chip): remove once we have proper onboarding
         let nonce = [0u8; 16];
@@ -71,21 +78,74 @@ impl Daemon {
         Ok(graph_id)
     }
 
-    pub async fn set_led<I>(&mut self, storage_id: GraphId, red: I, green: I, blue: I) -> Result<()>
-    where
-        I: Into<i64>,
-    {
-        let mut aranya = self.aranya.lock().await;
-        let mut sink = VecSink::new();
-        aranya.action(
-            storage_id,
-            &mut sink,
-            vm_action!(set_led(red.into(), green.into(), blue.into())),
-        )?;
+    pub fn get_imp<S: Sink<VmEffect>>(&self, graph_id: GraphId, sink: S) -> Imp<S> {
+        Imp {
+            client: Arc::clone(&self.aranya),
+            graph_id,
+            sink: Mutex::new(sink),
+        }
+    }
+}
+
+/// A shareable interface to the client that works on a single GraphId.
+pub struct Imp<S: Sink<VmEffect>> {
+    client: Arc<Mutex<Client>>,
+    graph_id: GraphId,
+    sink: Mutex<S>,
+}
+
+impl<S: Sink<VmEffect>> Imp<S> {
+    /// Lock the client and return a MutexGuard for it.
+    pub async fn get_client(&self) -> MutexGuard<'_, CriticalSectionRawMutex, Client> {
+        self.client.lock().await
+    }
+
+    pub fn graph_id(&self) -> GraphId {
+        self.graph_id
+    }
+
+    pub async fn add_commands(
+        &self,
+        cmds: &[impl Command + core::fmt::Debug],
+        trx: &mut Option<Transaction<SP, PE>>,
+    ) -> Result<()> {
+        let mut client = self.get_client().await;
+        let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
+        let mut sink = self.sink.lock().await;
+        dump_commands(cmds);
+        client.add_commands(trx, sink.deref_mut(), cmds)?;
+
         Ok(())
     }
 
-    pub fn get_client(&self) -> Arc<Mutex<Client>> {
-        Arc::clone(&self.aranya)
+    pub async fn commit(&self, mut trx: Transaction<SP, PE>) -> Result<()> {
+        let mut client = self.get_client().await;
+        let mut sink = self.sink.lock().await;
+        client.commit(&mut trx, sink.deref_mut())?;
+        Ok(())
+    }
+
+    pub async fn call_action(&self, action: aranya_runtime::VmAction<'_>) -> Result<()> {
+        let mut aranya = self.get_client().await;
+        let mut sink = self.sink.lock().await;
+        Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
     }
 }
+
+fn dump_commands(cmds: &[impl Command]) {
+    for c in cmds {
+        log::info!("  priority {:?} {}", c.priority(), c.id());
+    }
+}
+
+/* TODO(chip): when we have an async version of Actor
+impl Actor for Imp {
+    fn call_action(
+        &mut self,
+        action: aranya_runtime::VmAction<'_>,
+    ) -> Result<(), aranya_runtime::ClientError> {
+        let mut aranya = embassy_futures::block_on(self.get_client());
+        let mut sink = DebugSink {};
+        aranya.action(self.graph_id, &mut sink, action)
+    }
+} */
