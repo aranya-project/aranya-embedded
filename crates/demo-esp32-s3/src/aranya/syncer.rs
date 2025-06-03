@@ -208,15 +208,14 @@ where
         req_session.last_seen = Instant::now();
         let requester = &mut req_session.requester;
 
-        let cmds = {
-            let mut aranya = self.imp.get_client().await;
-            let mut peer_caches = self.peer_caches.lock().await;
-            let peer_cache = peer_caches.entry(from).or_default();
-            requester.receive(bytes, aranya.provider(), peer_cache)?
-        };
+        let cmds = requester.receive(bytes)?;
         if let Some(cmds) = cmds {
             if !cmds.is_empty() {
-                self.imp.add_commands(&cmds, &mut req_session.trx).await?;
+                let mut peer_caches = self.peer_caches.lock().await;
+                let peer_cache = peer_caches.entry(from).or_default();
+                self.imp
+                    .add_commands(&cmds, &mut req_session.trx, peer_cache)
+                    .await?;
             }
         } else {
             // We're done, destroy the requester
