@@ -14,9 +14,12 @@ mod storage;
 mod util;
 
 use aranya::daemon::{Daemon, Imp};
+
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
-use embassy_time::{Duration, TimeoutError, Timer};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
+use embassy_time::{Duration, TimeoutError, Timer, Ticker};
+
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{GpioPin, Input, Pull};
@@ -24,10 +27,21 @@ use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
+
+#[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
+
 use esp_storage::FlashStorage;
 use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
 use log::info;
+
+#[cfg(feature = "net-esp-now")]
+use esp_wifi::{
+    EspWifiController,
+    esp_now::{BROADCAST_ADDRESS, EspNowManager, EspNowReceiver, EspNowSender, PeerInfo},
+    init,
+};
+
 use net::NetworkEngine;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
@@ -47,14 +61,25 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timer_g1.timer0);
 
     // Initialize heaps
-    esp_alloc::heap_allocator!(64 * 1024);
+    //esp_alloc::heap_allocator!(64 * 1024);
+    esp_alloc::heap_allocator!(96 * 1024);
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
+    #[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
+    compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
 
+    #[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
+    compile_error!("One of qtpy-s3 or feather-dev must be enabled");
+
+    #[cfg(feature = "qtpy-s3")]
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
+        .expect("could not initialize neopixel");
+
+    #[cfg(feature = "feather-dev")]
     let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
         .expect("could not initialize neopixel");
 
@@ -80,7 +105,7 @@ async fn main(spawner: Spawner) {
     );
 
     let mut parameters = ParameterStore::new(io);
-    let p = match parameters.fetch() {
+    let parameter_values = match parameters.fetch() {
         Ok(p) => p,
         Err(e) => match e {
             ParameterStoreError::Corrupt => {
@@ -92,13 +117,13 @@ async fn main(spawner: Spawner) {
             e => panic!("{e}"),
         },
     };
-    log::info!("p: {p:?}");
+    log::info!("p: {parameter_values:?}");
 
     let mut daemon = Daemon::init(storage_provider)
         .await
         .expect("could not create daemon");
 
-    let graph_id = match p.graph_id {
+    let graph_id = match parameter_values.graph_id {
         None => {
             let graph_id = daemon.create_team().await.expect("could not create team");
             parameters
@@ -133,6 +158,42 @@ async fn main(spawner: Spawner) {
         network_engines.push(engine);
     }
 
+    #[cfg(feature = "net-esp-now")]
+    {
+        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
+        let init = &*mk_static!(
+            EspWifiController<'static>,
+            init(
+                timer_g0.timer0,
+                rng,
+                peripherals.RADIO_CLK,
+            )
+            .unwrap()
+        );
+    
+        let wifi = peripherals.WIFI;
+        let esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
+        log::info!("esp-now version {}", esp_now.version().unwrap());
+    
+        let (manager, sender, receiver) = esp_now.split();
+        let manager: &'static mut EspNowManager<'static> = mk_static!(EspNowManager<'static>, manager);
+        let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
+
+        let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
+        
+        let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
+
+        spawner.must_spawn(aranya::syncer::sync_esp_now(
+            daemon.get_imp(graph_id, NeopixelSink::new()),
+            engine.interface(),
+            parameter_values.peers.clone(),
+        ));
+
+        if network_engines.push(engine).is_err() {
+            log::info!("could not start ESP Now network engine");
+        }
+    }
+
     #[cfg(feature = "net-irda")]
     {
         let irts = IrdaTransceiver::new(
@@ -141,11 +202,11 @@ async fn main(spawner: Spawner) {
             peripherals.GPIO38,
             peripherals.GPIO8,
         );
-        let engine = net::irda::start(irts, p.address).await;
+        let engine = net::irda::start(irts, parameter_values.address).await;
         spawner.must_spawn(aranya::syncer::sync_irda(
             daemon.get_imp(graph_id, NeopixelSink::new()),
             engine.interface(),
-            p.peers.clone(),
+            parameter_values.peers.clone(),
         ));
         if network_engines.push(engine).is_err() {
             log::info!("could not start IR network engine");
@@ -184,11 +245,11 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(button_task(
         peripherals.GPIO0,
         daemon.get_imp(graph_id, NeopixelSink::new()),
-        p.color,
+        parameter_values.color,
         parameters,
     ));
 
-    spawner.must_spawn(led_task(neopixel, p.color));
+    spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
 }

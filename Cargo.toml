@@ -63,6 +63,7 @@ esp-wifi = { version = "0.12.0", default-features=false, features = [
     "wifi",
     "esp-alloc",
     "log",
+    "esp-now"
 ], optional = true }
 smoltcp = { version = "0.12.0", default-features = false, features = [
     "medium-ip",
@@ -90,6 +91,7 @@ crc = { version = "3.2", optional = true }
 # Dep is not yet public
 esp-irda-transceiver = { git = "git+ssh://git@github.com/aranya-project/esp-irda-transceiver", optional = true }
 raptorq = { version = "2", default-features = false, optional = true }
+cfg-if = "1.0.0"
 
 [build-dependencies]
 ron = "0.8.1"
@@ -109,7 +111,10 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-default = ["storage-internal", "net-irda"]
+default = ["storage-internal", "net-esp-now", "qtpy-s3"]
+
+qtpy-s3 = []
+feather-dev = []
 
 storage-internal = [
     "dep:embedded-storage",
@@ -137,6 +142,13 @@ net-irda = [
     "dep:crc",
     "dep:esp-irda-transceiver",
     "dep:raptorq",
+]
+
+net-esp-now = [
+    "dep:esp-wifi",
+    "dep:embassy-net",
+    "dep:raptorq",
+    "dep:crc",
 ]
 
 [profile.dev]

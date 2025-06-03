@@ -289,3 +289,16 @@ pub async fn sync_irda(
 
     embassy_futures::join::join(engine.initiate(), engine.serve()).await;
 }
+
+#[cfg(feature = "net-esp-now")]
+#[embassy_executor::task]
+pub async fn sync_esp_now(
+    imp: Imp<NeopixelSink>,
+    network: crate::net::espnow::EspNowNetworkInterface<'static>,
+    peers: heapless::Vec<u16, MAX_PEERS>,
+) {
+    log::info!("ESP Now syncer started");
+    let engine = SyncEngine::new(imp, network, peers);
+
+    embassy_futures::join::join(engine.initiate(), engine.serve()).await;
+}
