@@ -17,7 +17,7 @@ pub struct BaseConfiguration {
     pub password: String,
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>> {
+fn wifi_config() -> Result<(), Box<dyn std::error::Error>> {
     let config_path = Path::new("config/wifi.ron");
 
     // Check if config exists
@@ -49,6 +49,11 @@ pub const WIFI_PASSWORD: &str = "{pass}";
 
     File::create(&dest_path)?.write_all(content.as_bytes())?;
 
+    Ok(())
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    //wifi_config();
     aranya_setup();
 
     // Tell Cargo to rerun this if files change

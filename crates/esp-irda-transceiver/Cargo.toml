@@ -1,0 +1,16 @@
+[package]
+name = "esp-irda-transceiver"
+version = "0.2.0"
+edition = "2018"
+authors = ["Chip Black <chip@spideroak.com>"]
+license = "MIT"
+# repository = "https://github.com/aranya-project/esp-irda-transceiver"
+# Do not publish this to crates.io, sensitive information
+publish = false
+
+[dependencies]
+esp32s3 = "0.30"
+esp-hal = { version = "0.23", features = ["esp32s3", "unstable"] }
+embassy-sync = "0.6"
+embedded-hal-async = "1.0"
+log = "0.4"
