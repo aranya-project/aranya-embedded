@@ -60,9 +60,6 @@ const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if t
 const ESP_NOW_PACKET_SIZE: usize =
     ESP_NOW_MAGIC.len() + ESP_NOW_HEADER_SIZE + ESP_NOW_CHUNK_SIZE + ESP_NOW_CRC_SIZE + RAPTORQ_OVERHEAD;
 
-/// How long we should wait after the last received byte before we transmit
-const TRANSMIT_GUARD_DURATION: Duration = Duration::from_millis(1);
-
 /// The minimum time to wait between packets.
 const RANDOM_MIN: u32 = 25;
 /// The distance between the minimum and maximum times to wait. Time between packets is then
@@ -183,15 +180,6 @@ impl<'o> EspNowNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: EspNowPacket) -> Result<u16, EspNowError> {
-        // 
-        loop {
-            let last_rx = Instant::from_ticks(self.last_rx.load(Ordering::Relaxed) as u64);
-            if Instant::now() - last_rx < TRANSMIT_GUARD_DURATION {
-                Timer::at(last_rx + TRANSMIT_GUARD_DURATION).await;
-            } else {
-                break;
-            }
-        }
         let mut output_buf: [MaybeUninit<u8>; ESP_NOW_PACKET_SIZE] =
             [MaybeUninit::uninit(); ESP_NOW_PACKET_SIZE];
         let mut bb = BorrowedBuf::from(&mut output_buf[..]);

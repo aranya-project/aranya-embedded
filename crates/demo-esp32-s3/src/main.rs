@@ -4,6 +4,12 @@
 #![feature(core_io_borrowed_buf)]
 #![feature(new_zeroed_alloc)]
 
+#[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
+compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
+
+#[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
+compile_error!("One of qtpy-s3 or feather-dev must be enabled");
+
 extern crate alloc;
 
 pub mod aranya;
@@ -61,7 +67,6 @@ async fn main(spawner: Spawner) {
     esp_hal_embassy::init(timer_g1.timer0);
 
     // Initialize heaps
-    //esp_alloc::heap_allocator!(64 * 1024);
     esp_alloc::heap_allocator!(96 * 1024);
     esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
@@ -69,11 +74,6 @@ async fn main(spawner: Spawner) {
     info!("Embassy initialized!");
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
-    #[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
-    compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
-
-    #[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
-    compile_error!("One of qtpy-s3 or feather-dev must be enabled");
 
     #[cfg(feature = "qtpy-s3")]
     let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
