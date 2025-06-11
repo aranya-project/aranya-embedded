@@ -38,7 +38,8 @@ use esp_hal_embassy::{main, InterruptExecutor};
 use esp_irda_transceiver::IrdaTransceiver;
 
 use esp_storage::FlashStorage;
-use hardware::neopixel::{Neopixel, NeopixelSink, NEOPIXEL_SIGNAL};
+use hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL};
+use esp_rmt_neopixel::Neopixel;
 use log::info;
 
 #[cfg(feature = "net-esp-now")]
@@ -76,11 +77,11 @@ async fn main(spawner: Spawner) {
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
     #[cfg(feature = "qtpy-s3")]
-    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38)
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38, false)
         .expect("could not initialize neopixel");
 
     #[cfg(feature = "feather-dev")]
-    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21)
+    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21, false)
         .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
@@ -307,9 +308,10 @@ async fn button_task(
 }
 
 #[embassy_executor::task]
-async fn led_task(mut neopixel: Neopixel<'static>, initial_color: RgbU8) {
+async fn led_task(mut neopixel: Neopixel<'static>, initial_color: parameter_store::RgbU8) {
     let mut intensity = 1.0;
-    let mut color = initial_color;
+    // gross - TODO(chip): find some cleaner neutral format between parameter store and neopixel.
+    let mut color = <(u8, u8, u8) as From<parameter_store::RgbU8>>::from(initial_color).into();
     loop {
         match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
             Ok(c) => {

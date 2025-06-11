@@ -15,6 +15,7 @@ aranya-idam-ffi = { workspace = true }
 aranya-perspective-ffi = { workspace = true }
 aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
+cfg-if = "1.0.0"
 critical-section = "1.2.0"
 embassy-executor = { version = "0.7.0",  features = ["nightly"] }
 embassy-futures = "0.1"
@@ -31,24 +32,21 @@ esp-backtrace = { version = "0.15.0", features = [
     "panic-handler",
     "println",
 ]}
-esp-hal = { version = "0.23.1", features = [
-    "esp32s3",
-    "unstable", 
-    "quad-psram"
-] }
+esp-hal = { workspace = true }
 esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
 esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
-fugit = "0.3.7"
+esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
+fugit = { workspace = true }
 getrandom = { version = "0.2.15", features = ["custom"]}
-heapless = { version = "0.8.0", default-features = false }
+heapless = { workspace = true }
 log = { version = "0.4.21" }
 owo-colors = "4.1.0"
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
-static_cell = { version = "2.1.0", features = ["nightly"] }
-thiserror = { version = "2", default-features = false }
+static_cell = { workspace = true }
+thiserror = { workspace = true }
 tracing = { version = "0.1", default-features = false }
 
 # Dependencies enabled for "wifi"
@@ -90,7 +88,6 @@ embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sd
 crc = { version = "3.2", optional = true }
 esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
 raptorq = { version = "2", default-features = false, optional = true }
-cfg-if = "1.0.0"
 
 [build-dependencies]
 ron = "0.8.1"
