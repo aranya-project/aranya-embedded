@@ -234,7 +234,7 @@ impl<'o> EspNowNetworkEngine<'o> {
             let (sender, chunk_seq, chunk_len, total_len) = {
                 let mut sc = SliceCursor::new(&input_buf[0..ESP_NOW_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
-                if recipient != self.my_address {
+                if recipient != self.my_address && recipient != EspNowNetworkInterface::BRODCAST{
                     log::info!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
@@ -393,6 +393,7 @@ impl EspNowNetworkInterface<'_> {
 
 impl NetworkInterface for EspNowNetworkInterface<'_> {
     type Addr = u16;
+    const BRODCAST: Self::Addr = 0;
 
     async fn send_message(&self, msg: Message<u16>) -> Result<(), NetworkError> {
         match self.send(msg).await {
