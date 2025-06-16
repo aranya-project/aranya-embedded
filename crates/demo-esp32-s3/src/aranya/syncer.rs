@@ -201,7 +201,8 @@ where
 
         let address = Address {
             id: command.id(),
-            max_cut: command.max_cut().expect("BUG: Why can it fail?"), //BOOG
+            //BUG: can this really not fail?
+            max_cut: command.max_cut().expect("BUG: Why can it fail?"),
         };
 
         let hello: HelloMessage<N> = HelloMessage {
