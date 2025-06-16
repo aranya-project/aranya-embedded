@@ -1,5 +1,6 @@
 use aranya_crypto::keystore;
 use aranya_policy_vm::UnsupportedVersion;
+use aranya_runtime::StorageError;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]
@@ -33,6 +34,8 @@ pub enum Error {
     Rkyv(#[from] rkyv::rancor::Error),
     #[error("Unsupported Module Version")]
     UnsupportedVersion,
+    #[error("Unsupported Module Version")]
+    StorageError(#[from] aranya_runtime::StorageError),
     #[error("test")]
     Other,
 }

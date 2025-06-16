@@ -143,7 +143,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
 fn dump_commands(cmds: &[impl Command]) {
     for c in cmds {
-        log::info!("  priority {:?} {}", c.priority(), c.id());
+        log::info!("  priority {:?} {} MAX_CUT {}", c.priority(), c.id(), c.max_cut().unwrap());
     }
 }
 
