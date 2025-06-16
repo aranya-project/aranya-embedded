@@ -18,6 +18,7 @@ mod hardware;
 mod net;
 mod storage;
 mod util;
+mod watchdog;
 
 use aranya::daemon::{Daemon, Imp};
 use aranya_runtime::vm_action;
@@ -30,6 +31,7 @@ use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{GpioPin, Input, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
+use esp_hal::peripherals::{TIMG0, TIMG1};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
 use esp_rmt_neopixel::Neopixel;
@@ -49,6 +51,8 @@ use esp_wifi::{
 use net::NetworkEngine;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
+
+use crate::watchdog::Watchdog;
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
@@ -70,6 +74,9 @@ async fn main(spawner: Spawner) {
 
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
+
+    let (watchdog0, watchdog1) = watchdog::watchdog_init(timer_g0.wdt, timer_g1.wdt);
+    info!("Watchdog initialized");
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
@@ -243,7 +250,7 @@ async fn main(spawner: Spawner) {
         let executor = InterruptExecutor::new(sw_ints.software_interrupt2);
         let executor = EXECUTOR.init(executor);
         let spawner = executor.start(Priority::Priority3);
-        spawner.must_spawn(net_task(network_engines));
+        spawner.must_spawn(net_task(network_engines, watchdog1));
     }
 
     spawner.must_spawn(button_task(
@@ -256,16 +263,21 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
+    spawner.must_spawn(idle_task0(watchdog0));
 }
 
 #[embassy_executor::task]
-async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>) {
+async fn net_task(
+    network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>,
+    watchdog: &'static Watchdog<TIMG1>,
+) {
     log::info!("net task started");
 
     let spawner = Spawner::for_current_executor().await;
     for e in network_engines {
         e.run(spawner).expect("could not start engine {e}");
     }
+    spawner.must_spawn(idle_task1(watchdog));
 }
 
 #[embassy_executor::task]
@@ -344,5 +356,21 @@ async fn heap_report() {
         let stats = esp_alloc::HEAP.stats();
         log::info!("{}", stats);
         Timer::after_secs(10).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn idle_task0(watchdog: &'static Watchdog<TIMG0>) {
+    loop {
+        watchdog.feed().await;
+        Timer::after_millis(100).await;
+    }
+}
+
+#[embassy_executor::task]
+async fn idle_task1(watchdog: &'static Watchdog<TIMG1>) {
+    loop {
+        watchdog.feed().await;
+        Timer::after_millis(100).await;
     }
 }
