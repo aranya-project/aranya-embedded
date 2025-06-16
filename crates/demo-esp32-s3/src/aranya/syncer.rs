@@ -221,11 +221,14 @@ where
     async fn sync_respond(&self, from: N::Addr, request: SyncRequestMessage) -> Result<()> {
         let mut responder = SyncResponder::new(from);
         responder.receive(request)?;
+        log::info!("sync_respond: getting clinet");
+        let mut aranya = self.imp.get_client().await;
+        log::info!("sync_respond: got clinet");
         let mut c = 0;
         while responder.ready() {
             let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
             let len = {
-                let mut aranya = self.imp.get_client().await;
+
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
                 responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
@@ -263,11 +266,15 @@ where
             }
         } else {
             // We're done, destroy the requester
-            log::info!("sync ended with {from}");
+            log::info!("process_response: sync ended with {from}");
             // SAFETY: we know the session exists because we've been using it
             let req_session = sessions.remove(&from).unwrap();
             if let Some(trx) = req_session.trx {
+                log::info!("process_response: commiting");
                 self.imp.commit(trx).await?;
+                log::info!("process_response: done commiting");
+            } else {
+                log::info!("process_response: No transaction!!")
             }
         }
 
