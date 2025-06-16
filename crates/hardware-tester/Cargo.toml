@@ -1,0 +1,50 @@
+[package]
+name = "esp32-s3-hardware-tester"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+critical-section = "1.2.0"
+embassy-executor = { version = "0.7.0",  features = ["nightly"] }
+embassy-futures = "0.1"
+embassy-sync = "0.6"
+embassy-time = { version = "0.4.0",  features = ["generic-queue-8"] }
+embedded-hal = "1.0.0"
+embedded-io = "0.6.1"
+embedded-io-async = "0.6.1"
+esp-alloc = { version = "0.6.0" }
+esp-backtrace = { version = "0.15.0", features = [
+    "esp32s3",
+    "exception-handler",
+    "panic-handler",
+    "println",
+]}
+esp-hal = { version = "0.23.1", features = [
+    "esp32s3",
+    "unstable", 
+    "quad-psram"
+] }
+esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
+esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
+fugit = { workspace = true }
+getrandom = { version = "0.2.15", features = ["custom"]}
+heapless = { version = "0.8.0", default-features = false }
+log = { version = "0.4.21" }
+nb = "1.1"
+adafruit-seesaw = "0.11"
+static_cell = { workspace = true }
+thiserror = { version = "2", default-features = false }
+
+# For SD card
+embedded-hal-bus = { version = "0.3.0" }
+# Used git as VolumeManager::read still receives `&mut self` in 0.8.1
+embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs" }
+
+# For IrDA
+esp-irda-transceiver = { path = "../esp-irda-transceiver" }
+
+esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
+
+[features]
+feather-s3 = []
+spideroak-demo-v2 = []

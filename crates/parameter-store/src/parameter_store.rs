@@ -61,7 +61,7 @@ where
         self.io.write(&buffer)?;
         // This seems slightly pointless but we do want to verify that the write was
         // successful, so we re-fetch.
-        Ok(self.fetch()?)
+        self.fetch()
     }
 
     pub fn fetch(&mut self) -> Result<T, ParameterStoreError> {

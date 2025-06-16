@@ -1,0 +1,84 @@
+{
+    "version": "2.0.0",
+    "configurations": [
+      {
+          "preLaunchTask": "${defaultBuildTask}",
+          "type": "cortex-debug",
+          "request": "launch",
+          "name": "OpenOCD Launch",
+          "cwd": "${workspaceFolder}",
+          "executable": "target/xtensa-esp32s3-none-elf/debug/${workspaceFolderBasename}",
+          "servertype": "openocd",
+          "interface": "jtag",
+          "toolchainPrefix": "xtensa-esp32-elf",
+          "openOCDPreConfigLaunchCommands": ["set ESP_RTOS none"],
+          "serverpath": "/Users/chip/.espressif/tools/openocd-esp32/v0.12.0-esp32-20241016/openocd-esp32/bin/openocd",
+          "gdbPath": "${command:espIdf.getToolchainGdb}",
+          "configFiles": ["board/esp32s3-builtin.cfg"],
+          "overrideLaunchCommands": [
+              "set remote hardware-watchpoint-limit 2",
+              "mon esp32 smp on",
+              "mon reset halt",
+              "flushregs"
+          ],
+          "overrideRestartCommands": ["mon reset halt", "flushregs", "c"],
+          "svdFile": "${workspaceFolder}/esp32s3.svd"
+      },
+      {
+          "type": "cortex-debug",
+          "request": "attach",
+          "name": "OpenOCD Attach",
+          "cwd": "${workspaceFolder}",
+          "executable": "target/xtensa-esp32s3-none-elf/debug/${workspaceFolderBasename}",
+          "servertype": "openocd",
+          "interface": "jtag",
+          "toolchainPrefix": "xtensa-esp32-elf",
+          "openOCDPreConfigLaunchCommands": ["set ESP_RTOS none"],
+          "serverpath": "/Users/chip/.espressif/tools/openocd-esp32/v0.12.0-esp32-20241016/openocd-esp32/bin/openocd",
+          "gdbPath": "/Users/chip/.espressif/tools/xtensa-esp-elf-gdb/14.2_20240403/xtensa-esp-elf-gdb/bin/xtensa-esp32s3-elf-gdb",
+          "configFiles": ["board/esp32s3-builtin.cfg"],
+          "overrideAttachCommands": [
+              "set remote hardware-watchpoint-limit 2",
+              "mon esp32 smp on",
+              "mon halt",
+              "flushregs"
+          ],
+          "overrideRestartCommands": ["mon reset halt", "flushregs", "c"],
+          "svdFile": "${workspaceFolder}/esp32s3.svd"
+      },
+      {
+        "type": "gdb",
+        "request": "attach",
+        "name": "Native Debug - Standard",
+        "target": "extended-remote :3333",
+        "executable": "target/xtensa-esp32s3-none-elf/debug/${workspaceRootFolderName}",
+        "gdbpath": "${command:espIdf.getToolchainGdb}",
+        "cwd": "${workspaceRoot}",
+        "autorun": [
+          "file target/xtensa-esp32s3-none-elf/debug/${workspaceRootFolderName}",
+          "set remote hardware-watchpoint-limit 2",
+          "mon reset halt",
+          "maintenance flush register-cache",
+          "thb main"
+        ]
+      },
+      {
+        "type": "gdb",
+        "request": "attach",
+        "name": "Native Debug - No Hardware Breakpoints",
+        "target": "extended-remote :3333",
+        "executable": "target/xtensa-esp32s3-none-elf/debug/${workspaceRootFolderName}",
+        "gdbpath": "${command:espIdf.getToolchainGdb}",
+        "cwd": "${workspaceRoot}",
+        "autorun": [
+          "file target/xtensa-esp32s3-none-elf/debug/${workspaceRootFolderName}",
+          "set remote hardware-watchpoint-limit 2",
+          "mon reset halt",
+          "maintenance flush register-cache",
+          "thb main",
+          "set breakpoint auto-hw off", 
+          "set can-use-hw-watchpoints 0"
+        ]
+      }
+    ]
+  }

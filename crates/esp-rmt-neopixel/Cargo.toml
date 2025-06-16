@@ -1,0 +1,10 @@
+[package]
+name = "esp-rmt-neopixel"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+esp-hal = { workspace = true }
+fugit = { workspace = true }
+heapless = { workspace = true }
+thiserror = { workspace = true }
