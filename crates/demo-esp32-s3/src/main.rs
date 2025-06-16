@@ -20,12 +20,11 @@ mod storage;
 mod util;
 
 use aranya::daemon::{Daemon, Imp};
-
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
+#[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
-use embassy_time::{Duration, TimeoutError, Timer, Ticker};
-
+use embassy_time::{Duration, TimeoutError, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{GpioPin, Input, Pull};
@@ -33,20 +32,18 @@ use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
+use esp_rmt_neopixel::Neopixel;
+use esp_storage::FlashStorage;
+use hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL};
+use log::info;
 
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
 
-use esp_storage::FlashStorage;
-use hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL};
-use esp_rmt_neopixel::Neopixel;
-use log::info;
-
 #[cfg(feature = "net-esp-now")]
 use esp_wifi::{
-    EspWifiController,
-    esp_now::{BROADCAST_ADDRESS, EspNowManager, EspNowReceiver, EspNowSender, PeerInfo},
-    init,
+    esp_now::{EspNowManager, EspNowReceiver, EspNowSender, PeerInfo, BROADCAST_ADDRESS},
+    init, EspWifiController,
 };
 
 use net::NetworkEngine;
@@ -77,12 +74,22 @@ async fn main(spawner: Spawner) {
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
     #[cfg(feature = "qtpy-s3")]
-    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO39, peripherals.GPIO38, false)
-        .expect("could not initialize neopixel");
+    let neopixel = Neopixel::new(
+        peripherals.RMT,
+        peripherals.GPIO39,
+        peripherals.GPIO38,
+        false,
+    )
+    .expect("could not initialize neopixel");
 
     #[cfg(feature = "feather-dev")]
-    let neopixel = Neopixel::new(peripherals.RMT, peripherals.GPIO33, peripherals.GPIO21, false)
-        .expect("could not initialize neopixel");
+    let neopixel = Neopixel::new(
+        peripherals.RMT,
+        peripherals.GPIO33,
+        peripherals.GPIO21,
+        false,
+    )
+    .expect("could not initialize neopixel");
 
     #[cfg(feature = "storage-internal")]
     let storage_provider = storage::internal::init().expect("couldn't get storage");
@@ -164,24 +171,20 @@ async fn main(spawner: Spawner) {
         let rng = esp_hal::rng::Rng::new(peripherals.RNG);
         let init = &*mk_static!(
             EspWifiController<'static>,
-            init(
-                timer_g0.timer0,
-                rng,
-                peripherals.RADIO_CLK,
-            )
-            .unwrap()
+            init(timer_g0.timer0, rng, peripherals.RADIO_CLK).unwrap()
         );
-    
+
         let wifi = peripherals.WIFI;
         let esp_now = esp_wifi::esp_now::EspNow::new(&init, wifi).unwrap();
         log::info!("esp-now version {}", esp_now.version().unwrap());
-    
+
         let (manager, sender, receiver) = esp_now.split();
-        let manager: &'static mut EspNowManager<'static> = mk_static!(EspNowManager<'static>, manager);
+        let manager: &'static mut EspNowManager<'static> =
+            mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
 
         let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
-        
+
         let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
 
         spawner.must_spawn(aranya::syncer::sync_esp_now(
@@ -296,7 +299,8 @@ async fn button_task(
                 #[cfg(feature = "storage-internal")]
                 storage::internal::nuke().expect("could not nuke!?");
                 log::info!("Storage nuked. Release button to reset.");
-                log::info!("");  // Sometimes espflash doesn't flush the last line so the message isn't visible.
+                log::info!(""); // Sometimes espflash doesn't flush the last line so the message isn't visible.
+
                 // wait for the button to go high so we don't accidentally wind up in the
                 // firmware loader. But do it in a busy loop so we don't yield to any other
                 // async tasks.
@@ -312,6 +316,7 @@ async fn led_task(mut neopixel: Neopixel<'static>, initial_color: parameter_stor
     let mut intensity = 1.0;
     // gross - TODO(chip): find some cleaner neutral format between parameter store and neopixel.
     let mut color = <(u8, u8, u8) as From<parameter_store::RgbU8>>::from(initial_color).into();
+    neopixel.set_power(true);
     loop {
         match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
             Ok(c) => {

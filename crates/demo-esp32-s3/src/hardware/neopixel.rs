@@ -1,12 +1,5 @@
 use aranya_runtime::{Sink, VmEffect};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
-use esp_hal::{
-    gpio::{Level, Output, OutputPin},
-    peripheral::Peripheral,
-    peripherals::RMT,
-    rmt::{Channel, PulseCode, Rmt, TxChannel, TxChannelConfig, TxChannelCreator},
-    Blocking,
-};
 use esp_rmt_neopixel::RgbU8;
 
 use crate::aranya::policy::LedColorChanged;
