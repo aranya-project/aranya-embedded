@@ -35,18 +35,18 @@ Aranya Embedded is in its early stages and is not yet ready for production use.
   A tool for creating graphviz dot graphs from an extracted internal-storage
   linear storage partition.
 
-All of these crates are organized into a workspace, but compiling projects from
-the root workspace will not work due esp32 projects requiring a different
-toolchain (see [Setup](#setup) below). Please change directory into the
-individual crates and read their `README`s before attempting any builds.
+All of these crates are organized into a workspace, but compiling esp32
+projects from the root workspace will not work due esp32 projects requiring a
+different toolchain (see [Setup](#setup) below). Please change directory into
+the individual crates and read their `README`s before attempting any builds.
 
 ## Setup
 
-Aranya and Aranya Embedded require a [rust development environment](), but
-compiling esp32 projects requires some extra setup beyond that. Please follow
-the instructions in [The Rust on ESP
-Book](https://docs.esp-rs.org/book/installation/index.html) for installing for
-both RISC-V and Xtensa targets.
+Aranya and Aranya Embedded require a [rust development
+environment](https://www.rust-lang.org/), but compiling esp32 projects requires
+some extra setup beyond that. Please follow the instructions in [The Rust on
+ESP Book](https://docs.esp-rs.org/book/installation/index.html) for installing
+for both RISC-V and Xtensa targets.
 
 ## Contributing
 
