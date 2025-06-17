@@ -14,8 +14,8 @@ USB serial. See below for the selection of boards.
 
 Boards are chosen by feature flag. Currently the boards supported are:
 
-- `feather-s3` - An Adafruit ESP32-S3 Feather with the SpiderOak Demo V1 carrier
-  board
+- `feather-s3` - An Adafruit ESP32-S3 Feather with the [SpiderOak Demo V1 carrier
+  board](https://github.com/aranya-project/ir-demo-board).
 - `spideroak-demo-v2` - A custom board with an ESP32-S3-WROOM-1-N4R2 module and
   the same complement of hardware found on the S3 with the carrier board.
 
