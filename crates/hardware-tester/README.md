@@ -16,8 +16,10 @@ Boards are chosen by feature flag. Currently the boards supported are:
 
 - `feather-s3` - An Adafruit ESP32-S3 Feather with the [SpiderOak Demo V1 carrier
   board](https://github.com/aranya-project/ir-demo-board).
-- `spideroak-demo-v2` - A custom board with an ESP32-S3-WROOM-1-N4R2 module and
-  the same complement of hardware found on the S3 with the carrier board.
+- `spideroak-demo-v2` - A [custom
+  board](https://github.com/aranya-project/demo-board-v2) with an
+  ESP32-S3-WROOM-1-N4R2 module and the same complement of hardware found on the
+  S3 with the carrier board.
 
 No board is selected by default - you will have to specify one of these via the
 `--features` flag.

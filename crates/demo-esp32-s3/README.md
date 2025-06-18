@@ -62,5 +62,5 @@ PSRAM that has a boot button and a "neopixel" WS2812-like LED.
 
 | Board         | Description               | Neopixel | IR | SD | Notes |
 |---------------|---------------------------|----------|----|----|-------|
-| `feather-s3` | Adafruit ESP32-S3 Feather | Y        | N  | N  | The [IR Demo V2 carrier board](https://github.com/aranya-project/ir-demo-board) can provide IR and SD |
+| `feather-s3` | Adafruit ESP32-S3 Feather | Y        | N  | N  | The [IR Demo V1 carrier board](https://github.com/aranya-project/ir-demo-board) can provide IR and SD |
 | `qtpy-s3`     | Adafruit QT Py ESP32-S3   | Y        | N  | N  | |
