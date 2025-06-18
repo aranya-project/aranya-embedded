@@ -4,11 +4,11 @@
 #![feature(core_io_borrowed_buf)]
 #![feature(new_zeroed_alloc)]
 
-#[cfg(all(feature = "qtpy-s3", feature = "feather-dev"))]
-compile_error!("Only one of qtpy-s3 or feather-dev can be enabled");
+#[cfg(all(feature = "qtpy-s3", feature = "feather-s3"))]
+compile_error!("Only one of qtpy-s3 or feather-s3 can be enabled");
 
-#[cfg(not(any(feature = "qtpy-s3", feature = "feather-dev")))]
-compile_error!("One of qtpy-s3 or feather-dev must be enabled");
+#[cfg(not(any(feature = "qtpy-s3", feature = "feather-s3")))]
+compile_error!("One of qtpy-s3 or feather-s3 must be enabled");
 
 extern crate alloc;
 
@@ -82,7 +82,7 @@ async fn main(spawner: Spawner) {
     )
     .expect("could not initialize neopixel");
 
-    #[cfg(feature = "feather-dev")]
+    #[cfg(feature = "feather-s3")]
     let neopixel = Neopixel::new(
         peripherals.RMT,
         peripherals.GPIO33,
