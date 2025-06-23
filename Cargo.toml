@@ -15,3 +15,12 @@ aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", bra
 aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-device-ffi" }
 aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-idam-ffi" }
 aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-perspective-ffi" }
+esp-hal = { version = "0.23.1", features = [
+    "esp32s3",
+    "unstable", 
+    "quad-psram"
+] }
+fugit = "0.3.7"
+heapless = { version = "0.8.0", default-features = false }
+static_cell = { version = "2.1.0", features = ["nightly"] }
+thiserror = { version = "2", default-features = false }
