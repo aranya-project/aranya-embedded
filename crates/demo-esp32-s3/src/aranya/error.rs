@@ -34,7 +34,7 @@ pub enum Error {
     Rkyv(#[from] rkyv::rancor::Error),
     #[error("Unsupported Module Version")]
     UnsupportedVersion,
-    #[error("Unsupported Module Version")]
+    #[error("Storage Error")]
     StorageError(#[from] aranya_runtime::StorageError),
     #[error("test")]
     Other,
