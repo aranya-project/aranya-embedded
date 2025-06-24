@@ -260,7 +260,7 @@ impl<'o> IrNetworkEngine<'o> {
             let (sender, chunk_seq, chunk_len, total_len) = {
                 let mut sc = SliceCursor::new(&input_buf[0..IR_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
-                if recipient != self.my_address {
+                if recipient != self.my_address && recipient != IrNetworkInterface::BROADCAST {
                     log::debug!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
@@ -412,6 +412,7 @@ impl IrNetworkInterface<'_> {
 
 impl NetworkInterface for IrNetworkInterface<'_> {
     type Addr = u16;
+    const BROADCAST: Self::Addr = 0;
 
     async fn send_message(&self, msg: Message<u16>) -> Result<(), NetworkError> {
         match self.send(msg).await {

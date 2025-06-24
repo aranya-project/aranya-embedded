@@ -3,9 +3,10 @@ use alloc::string::String;
 use alloc::vec;
 use alloc::{boxed::Box, collections::btree_map::BTreeMap};
 use aranya_crypto::Rng;
+use aranya_runtime::Command;
 use aranya_runtime::{
-    PeerCache, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction,
-    MAX_SYNC_MESSAGE_SIZE,
+    Address, GraphId, Location, PeerCache, Storage, StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction, MAX_SYNC_MESSAGE_SIZE,
+    linear::LinearSegment, Segment,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -26,6 +27,18 @@ const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
 pub enum SyncMessageType {
     Request,
     Response,
+    Hello,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct HelloMessage<N> where 
+    N: NetworkInterface,
+    //N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>, {
+    //N::Addr: Default + Ord + serde::Serialize + serde::Deserialize, {
+    {
+    address: N::Addr,
+    head: Address,
+    peer_count: u16,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -164,24 +177,59 @@ where
     /// Loop forever, attempting to sync with known peers
     async fn initiate(&self) -> ! {
         loop {
-            for p in &self.peers {
-                self.sync_peer(*p)
-                    .await
-                    .inspect_err(|e| log::error!("sync initiation: {e}"))
-                    .ok();
+            if let Err(e) = self.send_hello().await {
+                log::info!("initiate: could send hello {e}");
             }
-            Timer::after_millis(100).await;
+            Timer::after_millis(500).await;
         }
+    }
+
+    async fn send_hello(&self) -> Result<()> {
+         let graph_id = self.imp.graph_id();
+
+        // BUG: check if it the same as our head before accessing storage.
+
+        let mut aranya = self.imp.get_client().await;
+        let provider = aranya.provider();
+        let storage = provider.get_storage(graph_id)?;
+        let head = storage.get_head()?;
+
+        let segment = storage.get_segment(head)?;
+        let command = segment
+            .get_command(head)
+            .expect("location must exist");
+
+        let address = Address {
+            id: command.id(),
+            //BUG: can this really not fail?
+            max_cut: command.max_cut().expect("BUG: Why can it fail?"),
+        };
+
+        let hello: HelloMessage<N> = HelloMessage {
+            address: self.network.my_address(),
+            peer_count: 0,
+            head: address,
+        };
+
+        let hello_bytes = postcard::to_allocvec(&hello)?;
+        let sm = SyncMessage::new(SyncMessageType::Hello, hello_bytes.into());
+        let m = sm.into_message(self.network.my_address(), N::BROADCAST)?;
+        self.network.send_message(m).await?;
+
+        Ok(())
     }
 
     async fn sync_respond(&self, from: N::Addr, request: SyncRequestMessage) -> Result<()> {
         let mut responder = SyncResponder::new(from);
         responder.receive(request)?;
+        log::info!("sync_respond: getting clinet");
+        let mut aranya = self.imp.get_client().await;
+        log::info!("sync_respond: got clinet");
         let mut c = 0;
         while responder.ready() {
             let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
             let len = {
-                let mut aranya = self.imp.get_client().await;
+
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
                 responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
@@ -219,11 +267,15 @@ where
             }
         } else {
             // We're done, destroy the requester
-            log::info!("sync ended with {from}");
+            log::info!("process_response: sync ended with {from}");
             // SAFETY: we know the session exists because we've been using it
             let req_session = sessions.remove(&from).unwrap();
             if let Some(trx) = req_session.trx {
+                log::info!("process_response: commiting");
                 self.imp.commit(trx).await?;
+                log::info!("process_response: done commiting");
+            } else {
+                log::info!("process_response: No transaction!!")
             }
         }
 
@@ -248,6 +300,27 @@ where
             }
             SyncMessageType::Response => {
                 self.process_response(from, &sm.bytes).await?;
+            }
+            SyncMessageType::Hello => {
+                let hello: HelloMessage<N> = postcard::from_bytes(&sm.bytes)?;
+                let head = hello.head;
+                let graph_id = self.imp.graph_id();
+
+                // BUG: check if it the same as our head before accessing storage.
+
+                let has_address = {
+                    let mut aranya = self.imp.get_client().await;
+                    let provider = aranya.provider();
+                    let storage = provider.get_storage(graph_id)?;
+                    storage.get_location(head)?.is_some()
+                };
+
+                if !has_address {
+                    let address = hello.address;
+                    self.sync_peer(address).await?;
+                }
+                
+
             }
         }
         Ok(())
