@@ -213,7 +213,7 @@ where
 
         let hello_bytes = postcard::to_allocvec(&hello)?;
         let sm = SyncMessage::new(SyncMessageType::Hello, hello_bytes.into());
-        let m = sm.into_message(self.network.my_address(), N::BRODCAST)?;
+        let m = sm.into_message(self.network.my_address(), N::BROADCAST)?;
         self.network.send_message(m).await?;
 
         Ok(())

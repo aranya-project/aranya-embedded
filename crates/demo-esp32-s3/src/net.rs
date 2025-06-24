@@ -59,7 +59,7 @@ where
 pub(crate) trait NetworkInterface {
     // The type of a peer address on this network
     type Addr: Copy + core::fmt::Display;
-    const BRODCAST: Self::Addr;
+    const BROADCAST: Self::Addr;
 
     /// Sends a message on the network.
     async fn send_message(&self, msg: Message<Self::Addr>) -> Result<(), NetworkError>;
