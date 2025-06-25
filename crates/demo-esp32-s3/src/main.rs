@@ -75,7 +75,7 @@ async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
-    let (watchdog0, watchdog1) = watchdog::watchdog_init(timer_g0.wdt, timer_g1.wdt);
+    let (wdt0, wdt1) = watchdog::watchdog_init(timer_g0.wdt, timer_g1.wdt);
     info!("Watchdog initialized");
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
@@ -255,7 +255,7 @@ async fn main(spawner: Spawner) {
         let executor = InterruptExecutor::new(sw_ints.software_interrupt2);
         let executor = EXECUTOR.init(executor);
         let spawner = executor.start(Priority::Priority3);
-        spawner.must_spawn(net_task(network_engines, watchdog1));
+        spawner.must_spawn(net_task(network_engines, wdt1));
     }
 
     spawner.must_spawn(button_task(
@@ -268,13 +268,13 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
-    spawner.must_spawn(idle_task0(watchdog0));
+    spawner.must_spawn(watchdog::idle_task0(wdt0));
 }
 
 #[embassy_executor::task]
 async fn net_task(
     network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>,
-    watchdog: &'static Watchdog<TIMG1>,
+    wdt: &'static Watchdog<TIMG1>,
 ) {
     log::info!("net task started");
 
@@ -282,7 +282,7 @@ async fn net_task(
     for e in network_engines {
         e.run(spawner).expect("could not start engine {e}");
     }
-    spawner.must_spawn(idle_task1(watchdog));
+    spawner.must_spawn(watchdog::idle_task1(wdt));
 }
 
 #[embassy_executor::task]
@@ -361,21 +361,5 @@ async fn heap_report() {
         let stats = esp_alloc::HEAP.stats();
         log::info!("{}", stats);
         Timer::after_secs(10).await;
-    }
-}
-
-#[embassy_executor::task]
-async fn idle_task0(watchdog: &'static Watchdog<TIMG0>) {
-    loop {
-        watchdog.feed().await;
-        Timer::after_millis(100).await;
-    }
-}
-
-#[embassy_executor::task]
-async fn idle_task1(watchdog: &'static Watchdog<TIMG1>) {
-    loop {
-        watchdog.feed().await;
-        Timer::after_millis(100).await;
     }
 }
