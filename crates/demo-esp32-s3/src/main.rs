@@ -98,22 +98,6 @@ async fn main(spawner: Spawner) {
     )
     .expect("could not initialize neopixel");
 
-    #[cfg(feature = "storage-internal")]
-    let storage_provider = storage::internal::init().expect("couldn't get storage");
-
-    #[cfg(feature = "storage-sd")]
-    let storage_provider = storage::sd::init(
-        peripherals.SPI2,
-        peripherals.GPIO36,
-        peripherals.GPIO35,
-        peripherals.GPIO37,
-        peripherals.GPIO11,
-        timer_g0.timer0,
-    )
-    .await
-    .expect("couldn't get storage");
-
-    #[cfg(feature = "storage-internal")]
     let io = EmbeddedStorageIO::new(
         FlashStorage::new(),
         0x9000, /* TODO(chip): get this from the partition table */
@@ -133,6 +117,27 @@ async fn main(spawner: Spawner) {
         },
     };
     log::info!("p: {parameter_values:?}");
+
+    // Auto-erase the storage when the parameters' graph ID is none
+    #[cfg(feature = "storage-internal")]
+    if parameter_values.graph_id.is_none() {
+        storage::internal::nuke().expect("could not nuke!?");
+    }
+
+    #[cfg(feature = "storage-internal")]
+    let storage_provider = storage::internal::init().expect("couldn't get storage");
+
+    #[cfg(feature = "storage-sd")]
+    let storage_provider = storage::sd::init(
+        peripherals.SPI2,
+        peripherals.GPIO36,
+        peripherals.GPIO35,
+        peripherals.GPIO37,
+        peripherals.GPIO11,
+        timer_g0.timer0,
+    )
+    .await
+    .expect("couldn't get storage");
 
     let mut daemon = Daemon::init(storage_provider)
         .await
