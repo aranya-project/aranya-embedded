@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+board-defs = { path = "../board-defs/" }
 critical-section = "1.2.0"
 embassy-executor = { version = "0.7.0",  features = ["nightly"] }
 embassy-futures = "0.1"
@@ -19,11 +20,7 @@ esp-backtrace = { version = "0.15.0", features = [
     "panic-handler",
     "println",
 ]}
-esp-hal = { version = "0.23.1", features = [
-    "esp32s3",
-    "unstable", 
-    "quad-psram"
-] }
+esp-hal = { workspace = true }
 esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
 esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
 fugit = { workspace = true }
@@ -32,7 +29,6 @@ heapless = { version = "0.8.0", default-features = false }
 log = { version = "0.4.21" }
 nb = "1.1"
 adafruit-seesaw = "0.11"
-static_cell = { workspace = true }
 thiserror = { version = "2", default-features = false }
 
 # For SD card
@@ -46,5 +42,6 @@ esp-irda-transceiver = { path = "../esp-irda-transceiver" }
 esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 
 [features]
-feather-s3 = []
-spideroak-demo-v2 = []
+adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
+adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
+spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]

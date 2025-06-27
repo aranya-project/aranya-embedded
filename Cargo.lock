@@ -427,6 +427,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "board-defs"
+version = "0.1.0"
+dependencies = [
+ "esp-hal",
+]
+
+[[package]]
 name = "buggy"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1518,6 +1525,7 @@ name = "esp32-s3-hardware-tester"
 version = "0.1.0"
 dependencies = [
  "adafruit-seesaw",
+ "board-defs",
  "critical-section",
  "embassy-executor",
  "embassy-futures",
@@ -1540,7 +1548,6 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "nb 1.1.0",
- "static_cell",
  "thiserror",
 ]
 

@@ -6,13 +6,13 @@
 
 extern crate alloc;
 
-mod boards;
 mod hardware;
 
 use adafruit_seesaw::devices::{NeoKey1x4, SeesawDevice, SeesawDeviceInit};
 use adafruit_seesaw::prelude::NeopixelModule;
 use adafruit_seesaw::rgb::Rgb;
 use adafruit_seesaw::SeesawRefCell;
+use board_defs::SdPinDef;
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer, WithTimeout};
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -22,15 +22,16 @@ use esp_hal::clock::CpuClock;
 use esp_hal::delay::Delay;
 use esp_hal::gpio::{Input, Level, Output, Pull};
 use esp_hal::i2c::master::I2c;
-use esp_hal::spi::master::Spi;
+use esp_hal::peripheral::Peripheral;
+use esp_hal::spi::{self, master::Spi};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal::{i2c, Blocking};
 use esp_hal_embassy::main;
 use esp_println::{print, println};
 use fugit::RateExtU32 as _;
 
-use esp_rmt_neopixel::Neopixel;
 use esp_irda_transceiver::IrdaTransceiver;
+use esp_rmt_neopixel::Neopixel;
 use log::info;
 
 macro_rules! menu {
@@ -51,12 +52,6 @@ macro_rules! menu {
     };
 }
 
-struct SdParts<'a> {
-    spi: Spi<'a, Blocking>,
-    cs: Output<'a>,
-    cd: Input<'a>,
-}
-
 async fn read_con_byte() -> u8 {
     let usb_jtag = unsafe { esp_hal::peripherals::USB_DEVICE::steal() };
     let mut usb_serial = esp_hal::usb_serial_jtag::UsbSerialJtag::new(usb_jtag);
@@ -71,17 +66,15 @@ async fn read_con_byte() -> u8 {
 #[main]
 async fn main(_spawner: Spawner) {
     // Initialize peripherals
-    let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
-    let board_def = boards::board_def(peripherals);
+    let mut peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
+    let mut board_def = board_defs::board_def!(peripherals);
 
-    let timer_group1 = TimerGroup::new(board_def.peripherals.timg1);
+    let timer_group1 = TimerGroup::new(peripherals.TIMG1);
     esp_hal_embassy::init(timer_group1.timer0);
 
     // Initialize heaps
     esp_alloc::heap_allocator!(96 * 1024);
-    if let Some(psram) = board_def.peripherals.psram {
-        esp_alloc::psram_allocator!(psram, esp_hal::psram);
-    }
+    esp_alloc::psram_allocator!(peripherals.PSRAM, esp_hal::psram);
 
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
@@ -94,7 +87,7 @@ async fn main(_spawner: Spawner) {
     }
 
     let mut neopixel = Neopixel::new(
-        board_def.peripherals.rmt,
+        peripherals.RMT,
         board_def.neopixel.data,
         board_def.neopixel.power,
         board_def.neopixel.power_inverted,
@@ -103,30 +96,14 @@ async fn main(_spawner: Spawner) {
 
     let mut main_button = Input::new(board_def.button, Pull::Up);
 
-    let mut i2c = I2c::new(board_def.peripherals.i2c0, i2c::master::Config::default())
+    let mut i2c = I2c::new(peripherals.I2C0, i2c::master::Config::default())
         .expect("could not create i2c")
         .with_sda(board_def.i2c.sda)
         .with_scl(board_def.i2c.scl);
 
-    let mut sd = board_def.sd.map(|sd| {
-        let miso = Input::new(sd.miso, Pull::Up);
-        SdParts {
-            spi: Spi::new(
-                board_def.peripherals.spi2,
-                esp_hal::spi::master::Config::default().with_frequency(1.MHz()),
-            )
-            .unwrap()
-            .with_sck(sd.sck)
-            .with_mosi(sd.mosi)
-            .with_miso(miso),
-            cs: Output::new(sd.cs, Level::High),
-            cd: Input::new(sd.cd, Pull::Up),
-        }
-    });
-
     let mut irts = board_def
         .ir
-        .map(|ir| IrdaTransceiver::new(board_def.peripherals.uart1, ir.tx, ir.rx, ir.en));
+        .map(|ir| IrdaTransceiver::new(peripherals.UART1, ir.tx, ir.rx, ir.en));
 
     loop {
         menu!("Select test",
@@ -134,7 +111,7 @@ async fn main(_spawner: Spawner) {
             'n': "Neopixel" => { led_test(&mut neopixel).await },
             'a': "Accessory power" => { accessory_power_test(&mut acc_driver).await },
             'q': "I2C/Qwiic" => { i2c_test(&mut acc_driver, &mut i2c).await },
-            's': "SD/SPI" => { sd_test(&mut acc_driver, &mut sd).await },
+            's': "SD/SPI" => { sd_test(&mut acc_driver, &mut peripherals.SPI2, &mut board_def.sd).await },
             'i': "IR" => { ir_test(&mut acc_driver, &mut irts).await }
         );
     }
@@ -213,23 +190,50 @@ async fn i2c_test(acc_power: &mut Option<Output<'_>>, i2c: &mut I2c<'_, Blocking
     }
 }
 
-async fn sd_test(acc_power: &mut Option<Output<'_>>, sd: &mut Option<SdParts<'_>>) {
-    let Some(SdParts { spi, cs, cd }) = sd else {
+async fn sd_test<const SCK: u8, const MOSI: u8, const MISO: u8, const CS: u8, const CD: u8>(
+    acc_power: &mut Option<Output<'_>>,
+    spi: &mut impl Peripheral<P = impl spi::master::PeripheralInstance>,
+    sd_def: &mut Option<SdPinDef<SCK, MOSI, MISO, CS, CD>>,
+) where
+    esp_hal::gpio::GpioPin<SCK>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
+    esp_hal::gpio::GpioPin<MOSI>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
+    esp_hal::gpio::GpioPin<MISO>: esp_hal::gpio::InputPin,
+    esp_hal::gpio::GpioPin<CS>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
+    esp_hal::gpio::GpioPin<CD>: esp_hal::gpio::InputPin,
+{
+    let Some(sd_def) = sd_def else {
         log::error!("No SD on this board");
         return;
     };
+
     if let Some(acc_power) = acc_power {
         log::info!("Enabling accessory power");
         acc_power.set_high();
     }
+
     let mut speed = 1.MHz();
+    // SAFETY: we only use this clone for as long as the &mut lives
+    // This is just a workaround for a weird ownership issue
+    let cloned_miso = unsafe { sd_def.miso.clone_unchecked() };
+    let miso = Input::new(cloned_miso, Pull::Up);
+    let mut spi = Spi::new(
+        spi,
+        esp_hal::spi::master::Config::default().with_frequency(speed),
+    )
+    .unwrap()
+    .with_sck(&mut sd_def.sck)
+    .with_mosi(&mut sd_def.mosi)
+    .with_miso(miso);
+    let mut cs = Output::new(&mut sd_def.cs, Level::High);
+    let cd = Input::new(&mut sd_def.cd, Pull::Up);
+
     loop {
         spi.apply_config(&esp_hal::spi::master::Config::default().with_frequency(speed))
             .expect("could not set SPI speed");
         println!("SPI speed is {}", speed);
         menu!("SD/SPI",
             't': "Read SD card" => {
-                read_sd(spi, cs).await;
+                read_sd(&mut spi, &mut cs).await;
             },
             'i': "Increase SPI speed" => {
                 speed = speed * 2;
@@ -246,6 +250,13 @@ async fn sd_test(acc_power: &mut Option<Output<'_>>, sd: &mut Option<SdParts<'_>
             'x': "Exit" => { break; }
         );
     }
+
+    // Deconfigure pins
+    let _ = Input::new(&mut sd_def.sck, Pull::None);
+    let _ = Input::new(&mut sd_def.mosi, Pull::None);
+    let _ = Input::new(&mut sd_def.miso, Pull::None);
+    let _ = Input::new(&mut sd_def.cd, Pull::None);
+    let _ = Input::new(&mut sd_def.cs, Pull::None);
 
     if let Some(acc_power) = acc_power {
         log::info!("Disabling accessory power");
