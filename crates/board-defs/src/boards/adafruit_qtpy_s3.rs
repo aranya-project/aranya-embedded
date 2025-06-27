@@ -2,21 +2,22 @@
 
 #[macro_export]
 macro_rules! board_def {
-    ($peripherals:ident) => {
-        ::board_defs::BoardDef {
-            button: $peripherals.GPIO0,
+    ($peripherals:ident) => {{
+        use $crate::esp_hal::gpio::Pin;
+        $crate::BoardDef {
+            button: $peripherals.GPIO0.degrade(),
             accessory_power: None,
-            neopixel: ::board_defs::NeoPixelPinDef {
-                data: $peripherals.GPIO39,
-                power: $peripherals.GPIO38,
+            neopixel: $crate::NeoPixelPinDef {
+                data: $peripherals.GPIO39.degrade(),
+                power: $peripherals.GPIO38.degrade(),
                 power_inverted: false,
             },
-            i2c: ::board_defs::I2CPinDef {
-                scl: $peripherals.GPIO40,
-                sda: $peripherals.GPIO41,
+            i2c: $crate::I2CPinDef {
+                scl: $peripherals.GPIO40.degrade(),
+                sda: $peripherals.GPIO41.degrade(),
             },
             sd: None,
             ir: None,
         }
-    };
+    }};
 }

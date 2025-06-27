@@ -190,17 +190,11 @@ async fn i2c_test(acc_power: &mut Option<Output<'_>>, i2c: &mut I2c<'_, Blocking
     }
 }
 
-async fn sd_test<const SCK: u8, const MOSI: u8, const MISO: u8, const CS: u8, const CD: u8>(
+async fn sd_test(
     acc_power: &mut Option<Output<'_>>,
     spi: &mut impl Peripheral<P = impl spi::master::PeripheralInstance>,
-    sd_def: &mut Option<SdPinDef<SCK, MOSI, MISO, CS, CD>>,
-) where
-    esp_hal::gpio::GpioPin<SCK>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
-    esp_hal::gpio::GpioPin<MOSI>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
-    esp_hal::gpio::GpioPin<MISO>: esp_hal::gpio::InputPin,
-    esp_hal::gpio::GpioPin<CS>: esp_hal::gpio::OutputPin + esp_hal::gpio::InputPin,
-    esp_hal::gpio::GpioPin<CD>: esp_hal::gpio::InputPin,
-{
+    sd_def: &mut Option<SdPinDef>,
+) {
     let Some(sd_def) = sd_def else {
         log::error!("No SD on this board");
         return;
