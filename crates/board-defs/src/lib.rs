@@ -1,5 +1,19 @@
 #![no_std]
 
+#[cfg(all(
+    feature = "adafruit-feather-s3",
+    feature = "adafruit-qtpy-s3",
+    feature = "spideroak-demo-v2"
+))]
+compile_error!("Only one board feature can be enabled");
+
+#[cfg(not(any(
+    feature = "adafruit-feather-s3",
+    feature = "adafruit-qtpy-s3",
+    feature = "spideroak-demo-v2"
+)))]
+compile_error!("One board feature must be enabled");
+
 mod boards;
 
 pub use esp_hal;
