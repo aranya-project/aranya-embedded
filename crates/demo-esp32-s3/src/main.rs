@@ -18,6 +18,7 @@ mod hardware;
 mod net;
 mod storage;
 mod util;
+mod watchdog;
 
 use aranya::daemon::{Daemon, Imp};
 use aranya_runtime::vm_action;
@@ -30,6 +31,7 @@ use esp_hal::clock::CpuClock;
 use esp_hal::gpio::{GpioPin, Input, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
+use esp_hal::peripherals::{TIMG0, TIMG1};
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
 use esp_rmt_neopixel::Neopixel;
@@ -49,6 +51,8 @@ use esp_wifi::{
 use net::NetworkEngine;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
+
+use crate::watchdog::Watchdog;
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
@@ -71,6 +75,9 @@ async fn main(spawner: Spawner) {
     esp_println::logger::init_logger_from_env();
     info!("Embassy initialized!");
 
+    let (wdt0, wdt1) = watchdog::watchdog_init(timer_g0.wdt, timer_g1.wdt);
+    info!("Watchdog initialized");
+
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
     #[cfg(feature = "qtpy-s3")]
@@ -91,22 +98,6 @@ async fn main(spawner: Spawner) {
     )
     .expect("could not initialize neopixel");
 
-    #[cfg(feature = "storage-internal")]
-    let storage_provider = storage::internal::init().expect("couldn't get storage");
-
-    #[cfg(feature = "storage-sd")]
-    let storage_provider = storage::sd::init(
-        peripherals.SPI2,
-        peripherals.GPIO36,
-        peripherals.GPIO35,
-        peripherals.GPIO37,
-        peripherals.GPIO11,
-        timer_g0.timer0,
-    )
-    .await
-    .expect("couldn't get storage");
-
-    #[cfg(feature = "storage-internal")]
     let io = EmbeddedStorageIO::new(
         FlashStorage::new(),
         0x9000, /* TODO(chip): get this from the partition table */
@@ -126,6 +117,27 @@ async fn main(spawner: Spawner) {
         },
     };
     log::info!("p: {parameter_values:?}");
+
+    // Auto-erase the storage when the parameters' graph ID is none
+    #[cfg(feature = "storage-internal")]
+    if parameter_values.graph_id.is_none() {
+        storage::internal::nuke().expect("could not nuke!?");
+    }
+
+    #[cfg(feature = "storage-internal")]
+    let storage_provider = storage::internal::init().expect("couldn't get storage");
+
+    #[cfg(feature = "storage-sd")]
+    let storage_provider = storage::sd::init(
+        peripherals.SPI2,
+        peripherals.GPIO36,
+        peripherals.GPIO35,
+        peripherals.GPIO37,
+        peripherals.GPIO11,
+        timer_g0.timer0,
+    )
+    .await
+    .expect("couldn't get storage");
 
     let mut daemon = Daemon::init(storage_provider)
         .await
@@ -243,7 +255,7 @@ async fn main(spawner: Spawner) {
         let executor = InterruptExecutor::new(sw_ints.software_interrupt2);
         let executor = EXECUTOR.init(executor);
         let spawner = executor.start(Priority::Priority3);
-        spawner.must_spawn(net_task(network_engines));
+        spawner.must_spawn(net_task(network_engines, wdt1));
     }
 
     spawner.must_spawn(button_task(
@@ -256,16 +268,21 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
+    spawner.must_spawn(watchdog::idle_task0(wdt0));
 }
 
 #[embassy_executor::task]
-async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>) {
+async fn net_task(
+    network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>,
+    wdt: &'static Watchdog<TIMG1>,
+) {
     log::info!("net task started");
 
     let spawner = Spawner::for_current_executor().await;
     for e in network_engines {
         e.run(spawner).expect("could not start engine {e}");
     }
+    spawner.must_spawn(watchdog::idle_task1(wdt));
 }
 
 #[embassy_executor::task]
