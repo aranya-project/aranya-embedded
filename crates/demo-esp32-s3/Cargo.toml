@@ -15,6 +15,7 @@ aranya-idam-ffi = { workspace = true }
 aranya-perspective-ffi = { workspace = true }
 aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
+board-defs = { path = "../board-defs" }
 cfg-if = "1.0.0"
 critical-section = "1.2.0"
 embassy-executor = { version = "0.7.0",  features = ["nightly"] }
@@ -108,11 +109,11 @@ postcard = { version = "1.0.10", default-features = false, features = ["alloc"] 
 rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
 
 [features]
-#default = ["storage-internal", "net-esp-now", "qtpy-s3"]
-default = ["storage-internal", "net-irda", "feather-s3"]
+default = ["storage-internal", "net-esp-now", "spideroak-demo-v2"]
 
-qtpy-s3 = []
-feather-s3 = []
+adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
+adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
+spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]
 
 storage-internal = [
     "dep:embedded-storage",

@@ -1,0 +1,12 @@
+[package]
+name = "board-defs"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+adafruit-feather-s3 = []
+adafruit-qtpy-s3 = []
+spideroak-demo-v2 = []
+
+[dependencies]
+esp-hal = { workspace = true }

@@ -4,12 +4,6 @@
 #![feature(core_io_borrowed_buf)]
 #![feature(new_zeroed_alloc)]
 
-#[cfg(all(feature = "qtpy-s3", feature = "feather-s3"))]
-compile_error!("Only one of qtpy-s3 or feather-s3 can be enabled");
-
-#[cfg(not(any(feature = "qtpy-s3", feature = "feather-s3")))]
-compile_error!("One of qtpy-s3 or feather-s3 must be enabled");
-
 extern crate alloc;
 
 pub mod aranya;
@@ -28,7 +22,7 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
 use embassy_time::{Duration, TimeoutError, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{GpioPin, Input, Pull};
+use esp_hal::gpio::{AnyPin, GpioPin, Input, Level, Output, Pull};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
 use esp_hal::peripherals::{TIMG0, TIMG1};
@@ -62,6 +56,7 @@ const MAX_NETWORK_ENGINES: usize = 2;
 async fn main(spawner: Spawner) {
     // Initialize peripherals
     let peripherals = esp_hal::init(esp_hal::Config::default().with_cpu_clock(CpuClock::max()));
+    let board_def = board_defs::board_def!(peripherals);
 
     // Initialize embassy timer groups
     let timer_g0 = TimerGroup::new(peripherals.TIMG0);
@@ -80,21 +75,15 @@ async fn main(spawner: Spawner) {
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
-    #[cfg(feature = "qtpy-s3")]
-    let neopixel = Neopixel::new(
-        peripherals.RMT,
-        peripherals.GPIO39,
-        peripherals.GPIO38,
-        false,
-    )
-    .expect("could not initialize neopixel");
+    let mut acc_power = board_def
+        .accessory_power
+        .map(|pin| Output::new(pin, Level::Low));
 
-    #[cfg(feature = "feather-s3")]
     let neopixel = Neopixel::new(
         peripherals.RMT,
-        peripherals.GPIO33,
-        peripherals.GPIO21,
-        false,
+        board_def.neopixel.data,
+        board_def.neopixel.power,
+        board_def.neopixel.power_inverted,
     )
     .expect("could not initialize neopixel");
 
@@ -128,16 +117,23 @@ async fn main(spawner: Spawner) {
     let storage_provider = storage::internal::init().expect("couldn't get storage");
 
     #[cfg(feature = "storage-sd")]
-    let storage_provider = storage::sd::init(
-        peripherals.SPI2,
-        peripherals.GPIO36,
-        peripherals.GPIO35,
-        peripherals.GPIO37,
-        peripherals.GPIO11,
-        timer_g0.timer0,
-    )
-    .await
-    .expect("couldn't get storage");
+    let storage_provider = if let Some(sd) = board_def.sd {
+        if let Some(acc_power) = &mut acc_power {
+            acc_power.set_high();
+        }
+        storage::sd::init(
+            peripherals.SPI2,
+            sd.sck,
+            sd.mosi,
+            sd.miso,
+            sd.cs,
+            timer_g0.timer0,
+        )
+        .await
+        .expect("couldn't get storage")
+    } else {
+        panic!("`storage-sd` configured but no SD peripheral defined on board");
+    };
 
     let mut daemon = Daemon::init(storage_provider)
         .await
@@ -211,13 +207,11 @@ async fn main(spawner: Spawner) {
     }
 
     #[cfg(feature = "net-irda")]
-    {
-        let irts = IrdaTransceiver::new(
-            peripherals.UART1,
-            peripherals.GPIO39,
-            peripherals.GPIO38,
-            peripherals.GPIO8,
-        );
+    if let Some(ir) = board_def.ir {
+        if let Some(acc_power) = &mut acc_power {
+            acc_power.set_high();
+        }
+        let irts = IrdaTransceiver::new(peripherals.UART1, ir.tx, ir.rx, ir.en);
         let engine = net::irda::start(irts, parameter_values.address).await;
         spawner.must_spawn(aranya::syncer::sync_irda(
             daemon.get_imp(graph_id, NeopixelSink::new()),
@@ -259,7 +253,7 @@ async fn main(spawner: Spawner) {
     }
 
     spawner.must_spawn(button_task(
-        peripherals.GPIO0,
+        board_def.button,
         daemon.get_imp(graph_id, NeopixelSink::new()),
         parameter_values.color,
         parameters,
@@ -287,7 +281,7 @@ async fn net_task(
 
 #[embassy_executor::task]
 async fn button_task(
-    pin: GpioPin<0>,
+    pin: AnyPin,
     imp: Imp<NeopixelSink>,
     color: RgbU8,
     mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
