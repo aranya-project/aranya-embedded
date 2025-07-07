@@ -22,8 +22,10 @@ mod util;
 use aranya::daemon::{Daemon, Imp};
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
+use embassy_sync::channel;
 #[cfg(feature = "net-esp-now")]
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
+use embassy_sync:: mutex::Mutex;
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{Duration, TimeoutError, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
@@ -51,6 +53,16 @@ use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Pa
 use static_cell::StaticCell;
 
 const MAX_NETWORK_ENGINES: usize = 2;
+const CORE_QUEUE_SIZE: usize = 2;
+
+type Channel<T> = 
+    embassy_sync::channel::Channel<CriticalSectionRawMutex, T, CORE_QUEUE_SIZE>;
+type Sender<'a, T> =
+    embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, CORE_QUEUE_SIZE>;
+type Receiver<'a, T> =
+    embassy_sync::channel::Receiver<'a, CriticalSectionRawMutex, T, CORE_QUEUE_SIZE>;
+
+static CHANNEL: Channel<TaskMessage> = Channel::new();
 
 //static NET_STACK: StaticCell<Stack<8192>> = StaticCell::new();
 
@@ -246,9 +258,14 @@ async fn main(spawner: Spawner) {
         spawner.must_spawn(net_task(network_engines));
     }
 
+    
+    spawner.must_spawn(core_task(
+        CHANNEL.receiver(), 
+        daemon.get_imp(graph_id, NeopixelSink::new())));
+
     spawner.must_spawn(button_task(
         peripherals.GPIO0,
-        daemon.get_imp(graph_id, NeopixelSink::new()),
+        CHANNEL.sender(),
         parameter_values.color,
         parameters,
     ));
@@ -256,7 +273,29 @@ async fn main(spawner: Spawner) {
     spawner.must_spawn(led_task(neopixel, parameter_values.color));
 
     spawner.must_spawn(heap_report());
+
+ 
 }
+
+
+enum TaskMessage {
+    SetLed(i64, i64, i64),
+} 
+
+#[embassy_executor::task]
+async fn core_task(channel: Receiver<'static, TaskMessage>, imp: Imp<NeopixelSink>) {
+ loop {
+    match channel.receive().await {
+        TaskMessage::SetLed(red, blue, green) => {
+            let result = imp.call_action(vm_action!(set_led(red, blue, green))).await;
+            if let Err(e) = result {
+                log::error!("could not set LED: {e}");
+            };
+        },
+    }
+ }
+}
+
 
 #[embassy_executor::task]
 async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES>) {
@@ -271,7 +310,7 @@ async fn net_task(network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX
 #[embassy_executor::task]
 async fn button_task(
     pin: GpioPin<0>,
-    imp: Imp<NeopixelSink>,
+    sender: Sender<'static, TaskMessage>,
     color: RgbU8,
     mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
 ) {
@@ -281,17 +320,11 @@ async fn button_task(
         match embassy_time::with_timeout(Duration::from_secs(5), driver.wait_for_high()).await {
             Ok(_) => {
                 log::info!("led pressed");
-                match imp
-                    .call_action(vm_action!(set_led(
+                 sender.send(TaskMessage::SetLed(
                         color.red as i64,
                         color.green as i64,
-                        color.blue as i64
-                    )))
-                    .await
-                {
-                    Ok(_) => (),
-                    Err(e) => log::error!("could not set LED: {e}"),
-                };
+                        color.blue as i64,
+                    )).await;
             }
             Err(TimeoutError) => {
                 // Button has been held for five seconds; DESTROY THE WORLD
