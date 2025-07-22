@@ -3,21 +3,21 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.dependencies]
-aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-lang" }
-aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-compiler" }
-aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-ifgen-build" }
-aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-runtime" }
-aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-ifgen" }
-aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-policy-vm" }
-aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto" }
-aranya-envelope-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-envelope-ffi" }
-aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-crypto-ffi" }
-aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-device-ffi" }
-aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-idam-ffi" }
-aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-perspective-ffi" }
+aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-lang" }
+aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-compiler" }
+aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-ifgen-build" }
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-runtime" }
+aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-ifgen" }
+aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-vm" }
+aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-crypto" }
+aranya-envelope-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-envelope-ffi" }
+aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-crypto-ffi" }
+aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-device-ffi" }
+aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-idam-ffi" }
+aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-perspective-ffi" }
 esp-hal = { version = "0.23.1", features = [
     "esp32s3",
-    "unstable", 
+    "unstable",
     "quad-psram"
 ] }
 fugit = "0.3.7"

@@ -7,7 +7,7 @@ edition = "2021"
 aranya-runtime = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
-aranya-crypto = { workspace = true }
+aranya-crypto = { workspace = true, features = ["memstore"] }
 aranya-envelope-ffi = { workspace = true }
 aranya-crypto-ffi = { workspace = true }
 aranya-device-ffi = { workspace = true }

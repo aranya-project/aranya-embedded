@@ -11,7 +11,7 @@ pub enum Error {
     /* #[error("CBOR decode error: {0}")]
     Decode(#[from] minicbor_serde::error::DecodeError), */
     #[error("Import error: {0}")]
-    Import(#[from] aranya_crypto::import::ImportError),
+    Import(#[from] aranya_crypto::dangerous::spideroak_crypto::import::ImportError),
     #[error("VM policy error: {0}")]
     VM(#[from] aranya_runtime::VmPolicyError),
     #[error("Client error: {0}")]
@@ -27,7 +27,7 @@ pub enum Error {
     #[error("Key wrapping error: {0}")]
     Wrap(#[from] aranya_crypto::WrapError),
     #[error("Public Key error: {0}")]
-    Pk(#[from] aranya_crypto::signer::PkError),
+    Pk(#[from] aranya_crypto::dangerous::spideroak_crypto::signer::PkError),
     #[error("postcard error: {0}")]
     Postcard(#[from] postcard::Error),
     #[error("rkyv error: {0}")]
