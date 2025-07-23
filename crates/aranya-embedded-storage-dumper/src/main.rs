@@ -114,16 +114,18 @@ fn make_dot(graph: BTreeMap<u32, SegmentRepr>, p: &Path) -> anyhow::Result<()> {
             )?;
             let command: VmProtocolData = postcard::from_bytes(&command_data.data)?;
             match command {
-                VmProtocolData::Init { kind, .. } => writeln!(f, "\\n({kind})\", style=filled, color=lightblue];")?,
+                VmProtocolData::Init { kind, .. } => {
+                    writeln!(f, "\\n({kind})\", style=filled, color=lightblue];")?
+                }
                 VmProtocolData::Basic { parent, kind, .. } => {
                     writeln!(f, "\\n({kind})\"];")?;
                     links.push((command_data.id, parent.id));
-                },
+                }
                 VmProtocolData::Merge { left, right } => {
                     writeln!(f, "\", style=filled, color=lightgreen];")?;
                     links.push((command_data.id, left.id));
                     links.push((command_data.id, right.id));
-                },
+                }
             }
         }
         writeln!(f, "    }}")?;

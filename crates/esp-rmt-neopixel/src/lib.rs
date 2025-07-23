@@ -1,7 +1,7 @@
 #![no_std]
 
-mod rgbu8;
 mod neopixel;
+mod rgbu8;
 
-pub use rgbu8::*;
 pub use neopixel::*;
+pub use rgbu8::*;

@@ -14,8 +14,8 @@ pub mod imp {
 
 #[cfg(feature = "storage-internal")]
 pub mod imp {
-    pub use esp_storage::FlashStorage;
     pub use super::internal::EspPartitionIoManager;
+    pub use esp_storage::FlashStorage;
 }
 
 use thiserror::Error;
