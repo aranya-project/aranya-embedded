@@ -1,7 +1,9 @@
 #![cfg(feature = "std")]
 
-use std::fs::File;
-use std::io::{Read, Seek, SeekFrom, Write};
+use std::{
+    fs::File,
+    io::{Read, Seek, SeekFrom, Write},
+};
 
 use super::AbstractIO;
 use crate::ParameterStoreError;

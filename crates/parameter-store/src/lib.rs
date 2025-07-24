@@ -7,10 +7,9 @@ use core::ops::Mul;
 
 use serde::{Deserialize, Serialize};
 
-pub const MAX_PEERS: usize = 16;
+pub use self::{abstract_io::*, parameter_store::*};
 
-pub use abstract_io::*;
-pub use parameter_store::*;
+pub const MAX_PEERS: usize = 16;
 
 #[derive(Debug, Clone, Copy, Default, serde::Serialize, serde::Deserialize)]
 pub struct RgbU8 {

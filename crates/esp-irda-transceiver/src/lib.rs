@@ -14,12 +14,11 @@ use esp_hal::{
         Level, Output, OutputPin,
     },
     peripheral::{Peripheral, PeripheralRef},
-    uart::{self, AnyUart, Instance, Uart, UartRx, UartTx},
+    uart::{self, AnyUart, Error as UartError, Instance, Uart, UartRx, UartTx},
     Async,
 };
 
-pub use ir::IrUart;
-pub use uart::Error as UartError;
+pub use self::ir::IrUart;
 
 /// An `IrdaTransceiver` wraps the UART connected to an IrDA transceiver and manages the
 /// physical layer of sending and receiving bytes.

@@ -3,5 +3,4 @@
 mod neopixel;
 mod rgbu8;
 
-pub use neopixel::*;
-pub use rgbu8::*;
+pub use self::{neopixel::*, rgbu8::*};

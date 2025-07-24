@@ -1,6 +1,6 @@
+use alloc::sync::Arc;
 use core::ops::DerefMut;
 
-use alloc::sync::Arc;
 use aranya_crypto::{
     dangerous::spideroak_crypto::{
         aead::{Aead, AeadKey},
@@ -16,9 +16,8 @@ use aranya_runtime::{
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
-use crate::storage::imp::*;
-
 use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
+use crate::storage::imp::*;
 
 // Use short names so we can more easily add generics.
 /// CE = Crypto Engine

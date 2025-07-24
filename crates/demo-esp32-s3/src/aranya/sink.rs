@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+
 use aranya_runtime::{Sink, VmEffect};
 
 /// Holds a collection of effect data.

@@ -1,21 +1,25 @@
-use alloc::collections::btree_map;
-use alloc::string::String;
-use alloc::vec;
-use alloc::{boxed::Box, collections::btree_map::BTreeMap};
+use alloc::{
+    boxed::Box,
+    collections::{btree_map, btree_map::BTreeMap},
+    string::String,
+    vec,
+};
+
 use aranya_crypto::Rng;
-use aranya_runtime::Command;
 use aranya_runtime::{
-    linear::LinearSegment, Address, GraphId, Location, PeerCache, Segment, Storage,
+    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
     StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
     Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
 
-use crate::hardware::neopixel::NeopixelSink;
 use crate::{
-    aranya::daemon::{PE, SP},
-    aranya::error::Result,
+    aranya::{
+        daemon::{PE, SP},
+        error::Result,
+    },
+    hardware::neopixel::NeopixelSink,
     net::{Message, NetworkInterface},
     Imp,
 };

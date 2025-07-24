@@ -13,8 +13,7 @@ use aranya_runtime::VmProtocolData;
 use clap::Parser;
 use rkyv::rancor;
 
-use internal::*;
-use linear::*;
+use crate::{internal::*, linear::*};
 
 #[derive(clap::Parser)]
 struct Args {

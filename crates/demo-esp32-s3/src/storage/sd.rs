@@ -3,6 +3,7 @@
 pub mod io_manager;
 
 use alloc::{format, rc::Rc};
+
 use aranya_runtime::linear::LinearStorageProvider;
 use embassy_time::Duration;
 use embedded_hal_bus::spi::ExclusiveDevice;
@@ -15,12 +16,11 @@ use esp_hal::{
     timer::timg,
 };
 use fugit::RateExtU32 as _;
-pub use io_manager::GraphManager;
 use owo_colors::OwoColorize;
 
-use crate::hardware::esp32_time::Esp32TimeSource;
-
+pub use self::io_manager::GraphManager;
 use super::StorageError;
+use crate::hardware::esp32_time::Esp32TimeSource;
 
 pub type VolumeMan = VolumeManager<
     SdCard<ExclusiveDevice<Spi<'static, esp_hal::Blocking>, Output<'static>, Delay>, Delay>,

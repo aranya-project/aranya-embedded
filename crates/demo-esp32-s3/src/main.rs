@@ -14,39 +14,39 @@ mod storage;
 mod util;
 mod watchdog;
 
-use aranya::daemon::{Daemon, Imp};
 use aranya_runtime::vm_action;
 use embassy_executor::Spawner;
 #[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
 use embassy_time::{Duration, TimeoutError, Timer};
 use esp_backtrace as _;
-use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{AnyPin, GpioPin, Input, Level, Output, Pull};
-use esp_hal::interrupt::software::SoftwareInterruptControl;
-use esp_hal::interrupt::Priority;
-use esp_hal::peripherals::{TIMG0, TIMG1};
-use esp_hal::timer::timg::TimerGroup;
+use esp_hal::{
+    clock::CpuClock,
+    gpio::{AnyPin, GpioPin, Input, Level, Output, Pull},
+    interrupt::{software::SoftwareInterruptControl, Priority},
+    peripherals::{TIMG0, TIMG1},
+    timer::timg::TimerGroup,
+};
 use esp_hal_embassy::{main, InterruptExecutor};
-use esp_rmt_neopixel::Neopixel;
-use esp_storage::FlashStorage;
-use hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL};
-use log::info;
-
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
-
+use esp_rmt_neopixel::Neopixel;
+use esp_storage::FlashStorage;
 #[cfg(feature = "net-esp-now")]
 use esp_wifi::{
     esp_now::{EspNowManager, EspNowReceiver, EspNowSender, PeerInfo, BROADCAST_ADDRESS},
     init, EspWifiController,
 };
-
-use net::NetworkEngine;
+use log::info;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
 use static_cell::StaticCell;
 
-use crate::watchdog::Watchdog;
+use crate::{
+    aranya::daemon::{Daemon, Imp},
+    hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL},
+    net::NetworkEngine,
+    watchdog::Watchdog,
+};
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
