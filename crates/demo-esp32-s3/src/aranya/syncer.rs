@@ -31,7 +31,7 @@ pub enum SyncMessageType {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct HelloMessage<N> where 
+pub struct HelloMessage<N> where
     N: NetworkInterface,
     //N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>, {
     //N::Addr: Default + Ord + serde::Serialize + serde::Deserialize, {
@@ -79,14 +79,14 @@ pub enum SyncResponse {
 }
 
 /// Container for a SyncRequester and its starting timestamp
-struct SyncSession<'a, A> {
-    requester: SyncRequester<'a, A>,
+struct SyncSession<A> {
+    requester: SyncRequester<A>,
     trx: Option<Transaction<SP, PE>>,
     last_seen: Instant,
 }
 
 /// Aranya client.
-struct SyncEngine<'a, N>
+struct SyncEngine<N>
 where
     N: NetworkInterface,
 {
@@ -94,11 +94,11 @@ where
     imp: Imp<NeopixelSink>,
     network: N,
     peers: heapless::Vec<N::Addr, MAX_PEERS>,
-    sessions: Mutex<BTreeMap<N::Addr, SyncSession<'a, N::Addr>>>,
+    sessions: Mutex<BTreeMap<N::Addr, SyncSession<N::Addr>>>,
     peer_caches: Mutex<BTreeMap<N::Addr, PeerCache>>,
 }
 
-impl<N> SyncEngine<'_, N>
+impl<N> SyncEngine<N>
 where
     N: NetworkInterface,
 {
@@ -118,7 +118,7 @@ where
     }
 }
 
-impl<N> SyncEngine<'_, N>
+impl<N> SyncEngine<N>
 where
     N: NetworkInterface,
     N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>,
@@ -319,7 +319,7 @@ where
                     let address = hello.address;
                     self.sync_peer(address).await?;
                 }
-                
+
 
             }
         }

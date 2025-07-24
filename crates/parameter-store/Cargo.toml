@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-wip", package = "aranya-runtime" }
+aranya-runtime = { workspace = true }
 crc = "3.2"
 heapless = { version = "0.8.0", default-features = false }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }

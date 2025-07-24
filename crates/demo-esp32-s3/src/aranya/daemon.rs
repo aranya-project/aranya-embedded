@@ -2,9 +2,11 @@ use core::ops::DerefMut;
 
 use alloc::sync::Arc;
 use aranya_crypto::{
-    aead::{Aead, AeadKey},
+    dangerous::spideroak_crypto::{
+        aead::{Aead, AeadKey},
+        keys::SecretKeyBytes,
+    },
     default::*,
-    keys::SecretKeyBytes,
     keystore::memstore::MemStore,
     CipherSuite,
 };
