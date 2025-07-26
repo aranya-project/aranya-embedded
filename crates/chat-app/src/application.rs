@@ -1,0 +1,155 @@
+extern crate alloc;
+
+pub mod serial;
+
+use alloc::{boxed::Box, string::String};
+
+use aranya_crypto::{DeviceId, Id, Rng};
+use aranya_runtime::{vm_action, GraphId, Sink, VmEffect};
+use embassy_futures::select::{select3, Either3};
+use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel};
+use embassy_time::Instant;
+use esp_println::println;
+use parameter_store::MAX_PEERS;
+use serde::{Deserialize, Serialize};
+
+use crate::{
+    application::serial::{SerialCommand, SerialResponse},
+    aranya::{
+        daemon::{Daemon, Imp, ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
+        policy::MessageReceived,
+        sink::DebugSink,
+    },
+    hardware::neopixel::{NeopixelState, NEOPIXEL_SIGNAL},
+};
+
+type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, 2>;
+
+pub static SERIAL_IN_CHANNEL: Channel<SerialCommand> = Channel::new();
+pub static SERIAL_OUT_CHANNEL: Channel<SerialResponse> = Channel::new();
+pub static BUTTON_CHANNEL: Channel<()> = Channel::new();
+
+#[derive(Debug, Clone)]
+pub struct ChatMessage {
+    /// This timestamp does not store an authoritative time value, just
+    /// a relative one for query purposes.
+    ts: Instant,
+    author: Id,
+    msg: String,
+}
+
+impl From<MessageReceived> for ChatMessage {
+    fn from(value: MessageReceived) -> Self {
+        ChatMessage {
+            ts: Instant::now(),
+            author: value.author,
+            msg: value.msg,
+        }
+    }
+}
+
+pub struct Application {
+    device_id: DeviceId,
+    chat_buffer: heapless::spsc::Queue<Box<ChatMessage>, 100>,
+    sink_recv: Channel<MessageReceived>,
+    unseen_count: usize,
+    mentioned: bool,
+}
+
+impl Application {
+    pub fn new(device_id: DeviceId) -> Application {
+        let sink_recv = channel::Channel::new();
+        Application {
+            device_id,
+            chat_buffer: heapless::spsc::Queue::new(),
+            sink_recv,
+            unseen_count: 0,
+            mentioned: false,
+        }
+    }
+
+    pub async fn run(&mut self) {
+        let mut effect_subscriber = EFFECT_OUT_CHANNEL
+            .subscriber()
+            .expect("application could not get subscriber slot");
+
+        loop {
+            let selected = select3(
+                effect_subscriber.next_message_pure(),
+                SERIAL_IN_CHANNEL.receive(),
+                BUTTON_CHANNEL.receive(),
+            )
+            .await;
+            match selected {
+                Either3::First(effect) => {
+                    if effect.recalled {
+                        continue;
+                    }
+                    match effect.name.as_str() {
+                        "MessageReceived" => {
+                            let msg: MessageReceived =
+                                effect.fields.try_into().expect("not MessageReceived");
+                            if self.chat_buffer.is_full() {
+                                self.chat_buffer.dequeue();
+                            }
+                            if msg.author != self.device_id.into_id() {
+                                self.unseen_count += 1;
+                                self.update_neopixel();
+                            }
+                            self.chat_buffer.enqueue(Box::new(msg.into())).ok();
+                        }
+                        _ => (),
+                    };
+                }
+                Either3::Second(ser_cmd) => {
+                    println!("application received command: {ser_cmd:?}");
+                    match ser_cmd {
+                        SerialCommand::SendMessage(msg) => {
+                            ACTION_IN_CHANNEL
+                                .send(vm_action!(send_message(self.device_id, msg)).into())
+                                .await;
+                            SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
+                        }
+                        SerialCommand::GetMessages(instant) => {
+                            let msgs = self
+                                .chat_buffer
+                                .iter()
+                                .filter_map(|i| {
+                                    if i.ts > instant {
+                                        Some(i.as_ref().clone())
+                                    } else {
+                                        None
+                                    }
+                                })
+                                .collect();
+                            SERIAL_OUT_CHANNEL
+                                .send(SerialResponse::MessageData(msgs))
+                                .await;
+                            self.unseen_count = 0;
+                            self.mentioned = false;
+                        }
+                    }
+                }
+                Either3::Third(_) => {
+                    self.unseen_count = 0;
+                    self.mentioned = false;
+                    self.update_neopixel();
+                }
+            }
+            println!("application processing done");
+        }
+    }
+
+    fn update_neopixel(&self) {
+        NEOPIXEL_SIGNAL.signal(NeopixelState {
+            unseen_count: self.unseen_count,
+            mentioned: self.mentioned,
+        });
+    }
+}
+
+#[embassy_executor::task]
+pub async fn app_task(device_id: DeviceId) {
+    let mut application = Application::new(device_id);
+    application.run().await;
+}
