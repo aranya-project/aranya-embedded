@@ -2,7 +2,7 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
 use embassy_time::Timer;
 use esp_hal::{
     peripherals::{TIMG0, TIMG1},
-    timer::timg::{TimerGroupInstance, MwdtStage, Wdt},
+    timer::timg::{MwdtStage, TimerGroupInstance, Wdt},
 };
 use fugit::ExtU64;
 use static_cell::StaticCell;
@@ -27,7 +27,10 @@ pub struct Watchdog<TIMG> {
     wdt: Mutex<CriticalSectionRawMutex, Wdt<TIMG>>,
 }
 
-impl<TIMG> Watchdog<TIMG> where TIMG: TimerGroupInstance {
+impl<TIMG> Watchdog<TIMG>
+where
+    TIMG: TimerGroupInstance,
+{
     pub fn new(mut wdt: Wdt<TIMG>) -> Watchdog<TIMG> {
         wdt.set_timeout(MwdtStage::Stage0, WATCHDOG_TIMEOUT_MS.millis());
         wdt.enable();

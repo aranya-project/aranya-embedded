@@ -187,7 +187,8 @@ where
         }
         // we have to make a copy of this list otherwise we're borrowing
         // &self inside the loop where we need to do self.sync_peer()
-        let peers: heapless::Vec::<N::Addr, MAX_PEERS> = self.syncable_peers.iter().cloned().collect();
+        let peers: heapless::Vec<N::Addr, MAX_PEERS> =
+            self.syncable_peers.iter().cloned().collect();
         for peer in peers {
             if let Err(err) = self.sync_peer(peer, client).await {
                 log::error!("Could not initiate sync with {peer}: {err}");
@@ -274,7 +275,10 @@ where
         bytes: &[u8],
         client: &mut Client,
     ) -> Result<()> {
-        let req_session = self.sessions.get_mut(&from).ok_or(SyncError::SessionMismatch)?;
+        let req_session = self
+            .sessions
+            .get_mut(&from)
+            .ok_or(SyncError::SessionMismatch)?;
         req_session.last_seen = Instant::now();
         let requester = &mut req_session.requester;
 
@@ -282,7 +286,13 @@ where
         if let Some(cmds) = cmds {
             if !cmds.is_empty() {
                 let peer_cache = self.peer_caches.entry(from).or_default();
-                add_commands(&cmds, &mut req_session.trx, peer_cache, client, self.graph_id)?;
+                add_commands(
+                    &cmds,
+                    &mut req_session.trx,
+                    peer_cache,
+                    client,
+                    self.graph_id,
+                )?;
             }
         } else {
             // We're done, destroy the requester

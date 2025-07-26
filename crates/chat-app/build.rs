@@ -67,8 +67,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 include!("src/aranya/envelope.rs");
 
 fn aranya_setup() {
-    let ffi_schema: &[ModuleSchema<'static>] =
-        &[NullEnvelope::SCHEMA];
+    let ffi_schema: &[ModuleSchema<'static>] = &[NullEnvelope::SCHEMA];
     // Parse policy
     let ast =
         parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");

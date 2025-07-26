@@ -186,7 +186,7 @@ impl<'o> IrNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: IrPacket) -> Result<u16, IrError> {
-        // 
+        //
         loop {
             let last_rx = Instant::from_ticks(self.last_rx.load(Ordering::Relaxed) as u64);
             if Instant::now() - last_rx < TRANSMIT_GUARD_DURATION {

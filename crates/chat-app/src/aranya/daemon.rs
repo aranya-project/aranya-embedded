@@ -115,7 +115,11 @@ impl<'a> Daemon<'a> {
         })
     }
 
-    pub fn add_network_interface(&mut self, network_interface: EspNowNetworkInterface<'a>, graph_id: GraphId) {
+    pub fn add_network_interface(
+        &mut self,
+        network_interface: EspNowNetworkInterface<'a>,
+        graph_id: GraphId,
+    ) {
         let syncer = SyncEngine::new(graph_id, network_interface);
         self.syncer = Some(syncer);
     }
@@ -147,7 +151,7 @@ impl<'a> Daemon<'a> {
                         Ok(_) => (),
                         Err(err) => println!("Error from action: {err}"),
                     }
-                },
+                }
                 Err(TimeoutError) => (),
             }
             syncer.process(&mut self.aranya).await;

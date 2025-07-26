@@ -150,21 +150,28 @@ impl<'d, 'a> SerialCommandEngine<'d, 'a> {
                             continue;
                         }
                         match scs {
-                            SerialCommandState::Idle => {
-                                match *c {
-                                    CR => {
-                                        self.class.write_packet("Serial ready; press ^Z to download client\r\n".as_bytes()).await?;
-                                    }
-                                    SUB => {
-                                        self.class.write_packet("----- 8< CUT HERE 8< -----\r\n".as_bytes()).await?;
-                                        for line in WEB_SOURCE.split("\n") {
-                                            self.send_buffer(line.as_bytes()).await?;
-                                            self.class.write_packet("\r\n".as_bytes()).await?;
-                                        }
-                                        self.class.write_packet("----- 8< CUT HERE 8< -----\r\n".as_bytes()).await?;
-                                    }
-                                    _ => (),
+                            SerialCommandState::Idle => match *c {
+                                CR => {
+                                    self.class
+                                        .write_packet(
+                                            "Serial ready; press ^Z to download client\r\n"
+                                                .as_bytes(),
+                                        )
+                                        .await?;
                                 }
+                                SUB => {
+                                    self.class
+                                        .write_packet("----- 8< CUT HERE 8< -----\r\n".as_bytes())
+                                        .await?;
+                                    for line in WEB_SOURCE.split("\n") {
+                                        self.send_buffer(line.as_bytes()).await?;
+                                        self.class.write_packet("\r\n".as_bytes()).await?;
+                                    }
+                                    self.class
+                                        .write_packet("----- 8< CUT HERE 8< -----\r\n".as_bytes())
+                                        .await?;
+                                }
+                                _ => (),
                             },
                             SerialCommandState::Command => match *c {
                                 STX => {
