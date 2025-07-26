@@ -1,5 +1,6 @@
 use std::{fs::OpenOptions, path::PathBuf};
 
+use aranya_crypto::Id;
 use clap::Parser;
 use parameter_store::*;
 
@@ -74,7 +75,20 @@ pub fn main() -> anyhow::Result<()> {
             "Graph ID: {}",
             params
                 .graph_id
-                .map(|v| format!("{v}"))
+                .map(|v| {
+                    let v: Id = v.into();
+                    format!("{v}")
+                })
+                .unwrap_or(String::from("None"))
+        );
+        println!(
+            "Device ID: {}",
+            params
+                .device_id
+                .map(|v| {
+                    let v: Id = v.into();
+                    format!("{v}")
+                })
                 .unwrap_or(String::from("None"))
         );
         println!("IR address: {}", params.address);

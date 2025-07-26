@@ -5,7 +5,6 @@ mod parameter_store;
 
 use core::ops::Mul;
 
-use aranya_runtime::GraphId;
 use serde::{Deserialize, Serialize};
 
 pub const MAX_PEERS: usize = 16;
@@ -50,7 +49,8 @@ impl From<(u8, u8, u8)> for RgbU8 {
 
 #[derive(Debug, Default, Serialize, Deserialize)]
 pub struct Parameters {
-    pub graph_id: Option<GraphId>,
+    pub graph_id: Option<[u8; 32]>,
+    pub device_id: Option<[u8; 32]>,
     pub address: u16,
     pub peers: heapless::Vec<u16, MAX_PEERS>,
     pub color: RgbU8,

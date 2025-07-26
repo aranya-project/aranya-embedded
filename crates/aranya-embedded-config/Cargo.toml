@@ -5,6 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
+aranya-crypto = { workspace = true }
 anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 heapless = "0.8"
