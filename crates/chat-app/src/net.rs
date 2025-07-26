@@ -1,9 +1,8 @@
 pub mod espnow;
 pub mod irda;
-pub mod wifi;
 
-#[cfg(not(any(feature = "net-wifi", feature = "net-irda", feature = "net-esp-now")))]
-compile_error!("One of \"net-wifi\" or \"net-irda\" or \"net-esp-now\" must be enabled");
+#[cfg(not(any(feature = "net-irda", feature = "net-esp-now")))]
+compile_error!("One of \"net-irda\" or \"net-esp-now\" must be enabled");
 
 use alloc::{boxed::Box, string::String};
 use embassy_executor::Spawner;

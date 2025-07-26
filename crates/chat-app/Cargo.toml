@@ -54,30 +54,6 @@ thiserror = { workspace = true }
 tracing = { version = "0.1", default-features = false }
 spideroak-base58 = "0.1"
 
-# Dependencies enabled for "wifi"
-embassy-net = { version = "0.6.0", features = [ "tcp", "udp", "dhcpv4", "medium-ethernet" ], optional = true }
-embedded-nal-async = { version = "0.8", optional = true }
-edge-dhcp = {version = "0.5.0", optional = true }
-edge-nal = {version = "0.5.0", optional = true }
-edge-nal-embassy = {version = "0.5.0", optional = true }
-esp-wifi = { version = "0.12.0", default-features=false, features = [
-    "esp32s3",
-    "utils",
-    "wifi",
-    "esp-alloc",
-    "log",
-    "esp-now"
-], optional = true }
-smoltcp = { version = "0.12.0", default-features = false, features = [
-    "medium-ip",
-    "proto-dhcpv4",
-    "proto-ipv4",
-    "socket-dhcpv4",
-    "socket-icmp",
-    "socket-raw",
-    "socket-tcp",
-    "socket-udp",
-], optional = true }
 
 # Enabled by "storage-internal" feature
 embedded-storage = { version = "0.3", optional = true }
@@ -93,6 +69,14 @@ embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sd
 crc = { version = "3.2", optional = true }
 esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
 raptorq = { version = "2", default-features = false, optional = true }
+
+# Dependencies enabled for "net-esp-now"
+esp-wifi = { version = "0.12.0", default-features=false, features = [
+    "esp32s3",
+    "esp-alloc",
+    "log",
+    "esp-now"
+], optional = true }
 
 [build-dependencies]
 ron = "0.8.1"
@@ -129,17 +113,6 @@ storage-sd = [
     "dep:embedded-sdmmc",
 ]
 
-net-wifi = [
-    "dep:esp-wifi",
-    "dep:embassy-net",
-    "dep:embedded-nal-async",
-    "dep:edge-dhcp",
-    "dep:edge-nal",
-    "dep:edge-nal-embassy",
-    "dep:esp-wifi",
-    "dep:smoltcp",
-]
-
 net-irda = [
     "dep:crc",
     "dep:esp-irda-transceiver",
@@ -148,7 +121,6 @@ net-irda = [
 
 net-esp-now = [
     "dep:esp-wifi",
-    "dep:embassy-net",
     "dep:raptorq",
     "dep:crc",
 ]
