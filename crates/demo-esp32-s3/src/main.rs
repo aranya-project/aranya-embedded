@@ -143,12 +143,12 @@ async fn main(spawner: Spawner) {
         None => {
             let graph_id = daemon.create_team().await.expect("could not create team");
             parameters
-                .update(|p| p.graph_id = Some(graph_id))
+                .update(|p| p.graph_id = Some(graph_id.into()))
                 .expect("could not store parameters");
             log::info!("Created graph - {graph_id}");
             graph_id
         }
-        Some(a) => a,
+        Some(a) => a.into(),
     };
 
     let mut network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES> =
