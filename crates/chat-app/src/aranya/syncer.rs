@@ -97,6 +97,7 @@ where
     syncable_peers: heapless::FnvIndexSet<N::Addr, MAX_PEERS>,
     sessions: BTreeMap<N::Addr, SyncSession<'a, N::Addr>>,
     peer_caches: BTreeMap<N::Addr, PeerCache>,
+    sink: PubSubSink<'a>,
     hello_boost: u8,
     last_hello: Instant,
 }
@@ -113,6 +114,7 @@ where
             syncable_peers: heapless::FnvIndexSet::new(),
             sessions: BTreeMap::new(),
             peer_caches: BTreeMap::new(),
+            sink: PubSubSink::new(),
             hello_boost: 0,
             last_hello: Instant::from_ticks(0),
         }
@@ -149,8 +151,7 @@ where
                         // sync is stalled. Commit any progress so far and remove this entry
                         let mut ses = entry.remove();
                         if let Some(trx) = &mut ses.trx {
-                            let mut sink = PubSubSink::new();
-                            client.commit(trx, &mut sink)?;
+                            client.commit(trx, &mut self.sink)?;
                         }
                         self.syncable_peers.remove(&peer_addr);
                     }
@@ -288,6 +289,7 @@ where
                     &cmds,
                     &mut req_session.trx,
                     peer_cache,
+                    &mut self.sink,
                     client,
                     self.graph_id,
                 )?;
@@ -299,8 +301,7 @@ where
             let mut req_session = self.sessions.remove(&from).unwrap();
             if let Some(trx) = &mut req_session.trx {
                 log::info!("process_response: commiting");
-                let mut sink = PubSubSink::new(); // TODO(chip): save this
-                client.commit(trx, &mut sink)?;
+                client.commit(trx, &mut self.sink)?;
                 log::info!("process_response: done commiting");
             } else {
                 log::error!("process_response: No transaction!!")
@@ -371,13 +372,13 @@ fn add_commands(
     cmds: &[impl Command + core::fmt::Debug],
     trx: &mut Option<Transaction<SP, PE>>,
     peer_cache: &mut PeerCache,
+    sink: &mut PubSubSink<'_>,
     client: &mut Client,
     graph_id: GraphId,
 ) -> Result<()> {
     let trx = trx.get_or_insert_with(|| client.transaction(graph_id));
-    let mut sink = PubSubSink::new(); // TODO(chip): save this
     dump_commands(cmds);
-    client.add_commands(trx, &mut sink, cmds)?;
+    client.add_commands(trx, sink, cmds)?;
 
     // Update peer cache
     let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
