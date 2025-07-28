@@ -81,8 +81,8 @@ pub enum SyncResponse {
 }
 
 /// Container for a SyncRequester and its starting timestamp
-struct SyncSession<'a, A> {
-    requester: SyncRequester<'a, A>,
+struct SyncSession<A> {
+    requester: SyncRequester<A>,
     trx: Option<Transaction<SP, PE>>,
     last_seen: Instant,
 }
@@ -95,7 +95,7 @@ where
     graph_id: GraphId,
     network: N,
     syncable_peers: heapless::FnvIndexSet<N::Addr, MAX_PEERS>,
-    sessions: BTreeMap<N::Addr, SyncSession<'a, N::Addr>>,
+    sessions: BTreeMap<N::Addr, SyncSession<N::Addr>>,
     peer_caches: BTreeMap<N::Addr, PeerCache>,
     sink: PubSubSink<'a>,
     hello_boost: u8,

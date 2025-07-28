@@ -465,4 +465,8 @@ where
             Ok(alloc::vec![].into_iter())
         }
     }
+
+    fn remove(&mut self, id: GraphId) -> Result<(), AranyaStorageError> {
+        unimplemented!()
+    }
 }

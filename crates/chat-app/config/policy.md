@@ -18,8 +18,8 @@ command Init {
         nonce bytes,
     }
 
-    seal { return envelope::seal(serialize(this)) }
-    open { return deserialize(envelope::open(envelope)) }
+    seal { return envelope::do_seal(serialize(this)) }
+    open { return deserialize(envelope::do_open(envelope)) }
 
     policy {
         finish {
@@ -46,8 +46,8 @@ command ChatMessage {
         msg string,
     }
 
-    seal { return envelope::seal(serialize(this)) }
-    open { return deserialize(envelope::open(envelope)) }
+    seal { return envelope::do_seal(serialize(this)) }
+    open { return deserialize(envelope::do_open(envelope)) }
 
     policy {
         finish {

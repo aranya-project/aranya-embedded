@@ -7,13 +7,15 @@ use alloc::{
     vec::Vec,
 };
 use aranya_crypto::{
-    aead::{Aead, AeadKey},
+    dangerous::spideroak_crypto::{
+        aead::{Aead, AeadKey},
+        keys::SecretKeyBytes,
+    },
     default::*,
-    keys::SecretKeyBytes,
     keystore::memstore::MemStore,
     CipherSuite,
 };
-use aranya_policy_vm::Value;
+use aranya_policy_vm::{Identifier, Value};
 use aranya_runtime::{
     linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
     PeerCache, Sink, Storage, StorageProvider, Transaction, VmAction, VmEffect,
@@ -73,14 +75,14 @@ pub static EFFECT_OUT_CHANNEL: PubSubChannel<VmEffect> = PubSubChannel::new();
 
 #[derive(Debug)]
 pub struct OwnedAction {
-    name: String,
+    name: Identifier,
     args: Vec<Value>,
 }
 
 impl OwnedAction {
     pub fn as_vmaction(&self) -> VmAction<'_> {
         VmAction {
-            name: &self.name,
+            name: self.name.clone(),
             args: Cow::Borrowed(&self.args),
         }
     }
@@ -185,7 +187,7 @@ impl<'a> Daemon<'a> {
                         Err(err) => println!("Error from action: {err}"),
                     }
                 }
-                Err(TimeoutError) => (),
+                Err(_) => (),
             }
             #[cfg(feature = "net-esp-now")]
             syncer_esp_now.process(&mut self.aranya).await;

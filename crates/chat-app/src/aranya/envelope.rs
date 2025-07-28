@@ -31,10 +31,10 @@ struct Envelope {
 "#
 )]
 impl NullEnvelope {
-    #[ffi_export(def = "function seal(payload bytes) struct Envelope")]
+    #[ffi_export(def = "function do_seal(payload bytes) struct Envelope")]
     fn seal<E>(
         &self,
-        ctx: &CommandContext<'_>,
+        ctx: &CommandContext,
         _eng: &mut E,
         payload: Vec<u8>,
     ) -> Result<Envelope, MachineError> {
@@ -46,7 +46,7 @@ impl NullEnvelope {
         }
 
         let CommandContext::Seal(ctx) = ctx else {
-            panic!("envelope::seal called outside seal context");
+            panic!("envelope::do_seal called outside seal context");
         };
 
         let parent_id = ctx.head_id.into();
@@ -59,7 +59,8 @@ impl NullEnvelope {
         })
         .expect("can serialize `HashedFields`");
 
-        let command_id = CommandId::hash_for_testing_only(&data);
+        use aranya_crypto::dangerous::spideroak_crypto::{hash::Hash, rust::Sha256};
+        let command_id: CommandId = Sha256::hash(&data).into_array().into();
 
         Ok(Envelope {
             parent_id: parent_id.into(),
@@ -71,10 +72,10 @@ impl NullEnvelope {
         })
     }
 
-    #[ffi_export(def = "function open(envelope_input struct Envelope) bytes")]
+    #[ffi_export(def = "function do_open(envelope_input struct Envelope) bytes")]
     fn open<E>(
         &self,
-        _ctx: &CommandContext<'_>,
+        _ctx: &CommandContext,
         _eng: &mut E,
         envelope_input: Envelope,
     ) -> Result<Vec<u8>, Infallible> {

@@ -7,13 +7,12 @@ edition = "2021"
 aranya-runtime = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
-aranya-crypto = { workspace = true }
+aranya-crypto = { workspace = true, features = ["memstore"] }
 aranya-envelope-ffi = { workspace = true }
 aranya-crypto-ffi = { workspace = true }
 aranya-device-ffi = { workspace = true }
 aranya-idam-ffi = { workspace = true }
 aranya-perspective-ffi = { workspace = true }
-aranya-base58 = "0.1.0"
 aranya-buggy = "0.1.0"
 board-defs = { path = "../board-defs" }
 bytes = { version = "1.10.1", default-features = false }
@@ -52,7 +51,7 @@ serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
 static_cell = { workspace = true }
 thiserror = { workspace = true }
 tracing = { version = "0.1", default-features = false }
-spideroak-base58 = "0.1"
+spideroak-base58 = "0.2"
 
 
 # Enabled by "storage-internal" feature

@@ -332,7 +332,7 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
                 phase = 0;
                 c = 10;
             }
-            Err(TimeoutError) => {
+            Err(_) => {
                 if c > 0 {
                     c -= 1;
                 }

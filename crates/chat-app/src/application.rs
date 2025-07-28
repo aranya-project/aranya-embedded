@@ -2,9 +2,13 @@ extern crate alloc;
 
 pub mod serial;
 
-use alloc::{boxed::Box, string::String};
+use alloc::{
+    boxed::Box,
+    string::{String, ToString},
+};
 
 use aranya_crypto::{DeviceId, Id, Rng};
+use aranya_policy_vm::Text;
 use aranya_runtime::{vm_action, GraphId, Sink, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel};
@@ -43,7 +47,7 @@ impl From<MessageReceived> for ChatMessage {
         ChatMessage {
             ts: Instant::now(),
             author: value.author,
-            msg: value.msg,
+            msg: value.msg.to_string(),
         }
     }
 }
@@ -105,6 +109,7 @@ impl Application {
                     println!("application received command: {ser_cmd:?}");
                     match ser_cmd {
                         SerialCommand::SendMessage(msg) => {
+                            let msg: Text = msg.try_into().expect("invalid string");
                             ACTION_IN_CHANNEL
                                 .send(vm_action!(send_message(self.device_id, msg)).into())
                                 .await;
