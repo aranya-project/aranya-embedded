@@ -148,7 +148,7 @@ impl<'a> Daemon<'a> {
                         .aranya
                         .action(graph_id, &mut sink, action.as_vmaction())
                     {
-                        Ok(_) => (),
+                        Ok(_) => syncer.boost_hello(),
                         Err(err) => println!("Error from action: {err}"),
                     }
                 }

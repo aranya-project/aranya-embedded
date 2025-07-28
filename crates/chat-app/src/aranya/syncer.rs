@@ -195,6 +195,11 @@ where
         Duration::from_millis(1000 >> self.hello_boost)
     }
 
+    pub fn boost_hello(&mut self) {
+        self.hello_boost = 3;
+        self.last_hello = Instant::from_ticks(0);
+    }
+
     async fn send_hello(&mut self, client: &mut Client) -> Result<()> {
         log::info!("send_hello");
         // BUG: check if it the same as our head before accessing storage.
