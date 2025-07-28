@@ -244,8 +244,6 @@ where
     ) -> Result<()> {
         let mut responder = SyncResponder::new(from);
         responder.receive(request)?;
-        log::info!("sync_respond: getting clinet");
-        log::info!("sync_respond: got clinet");
         let mut c = 0;
         while responder.ready() {
             let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
@@ -305,7 +303,7 @@ where
                 client.commit(trx, &mut sink)?;
                 log::info!("process_response: done commiting");
             } else {
-                log::info!("process_response: No transaction!!")
+                log::error!("process_response: No transaction!!")
             }
         }
 
