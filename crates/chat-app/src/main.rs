@@ -172,26 +172,6 @@ async fn main(spawner: Spawner) {
     let mut network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES> =
         heapless::Vec::new();
 
-    #[cfg(feature = "net-wifi")]
-    {
-        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
-        let engine = net::wifi::start(
-            peripherals.WIFI,
-            peripherals.RADIO_CLK,
-            timer_g1.timer1,
-            rng,
-            spawner,
-        )
-        .await;
-        spawner
-            .spawn(aranya::syncer::sync_wifi(
-                daemon.get_client(),
-                engine.interface(),
-            ))
-            .expect("could not spawn WiFi syncer task");
-        network_engines.push(engine);
-    }
-
     #[cfg(feature = "net-esp-now")]
     {
         use crate::aranya::syncer::SyncEngine;
@@ -215,7 +195,7 @@ async fn main(spawner: Spawner) {
 
         let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
 
-        daemon.add_network_interface(engine.interface(), graph_id);
+        daemon.add_esp_now_interface(engine.interface(), graph_id);
 
         if network_engines.push(engine).is_err() {
             log::info!("could not start ESP Now network engine");
@@ -229,11 +209,9 @@ async fn main(spawner: Spawner) {
         }
         let irts = IrdaTransceiver::new(peripherals.UART1, ir.tx, ir.rx, ir.en);
         let engine = net::irda::start(irts, parameter_values.address).await;
-        spawner.must_spawn(aranya::syncer::sync_irda(
-            daemon.get_imp(graph_id, DebugSink {}),
-            engine.interface(),
-            parameter_values.peers.clone(),
-        ));
+
+        daemon.add_irda_interface(engine.interface(), graph_id);
+
         if network_engines.push(engine).is_err() {
             log::info!("could not start IR network engine");
         }

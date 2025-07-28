@@ -311,8 +311,8 @@ impl<'o> IrNetworkEngine<'o> {
             send_tx: self.send_channel.sender(),
             receive_rx: self.receive_channel.receiver(),
             my_address: self.my_address,
-            message_seq: AtomicU8::new(0),
-            reconstructors: Mutex::new(BTreeMap::new()),
+            message_seq: 0,
+            reconstructors: BTreeMap::new(),
         }
     }
 
@@ -363,15 +363,16 @@ pub struct IrNetworkInterface<'a> {
     send_tx: Sender<'a, IrPacket>,
     receive_rx: Receiver<'a, IrPacket>,
     my_address: u16,
-    message_seq: AtomicU8,
-    reconstructors: Mutex<BTreeMap<u16, IrMessageReconstructor>>,
+    message_seq: u8,
+    reconstructors: BTreeMap<u16, IrMessageReconstructor>,
 }
 
 impl IrNetworkInterface<'_> {
     /// Send a message to a recipient
-    async fn send(&self, msg: Message<u16>) -> Result<(), IrError> {
+    async fn send(&mut self, msg: Message<u16>) -> Result<(), IrError> {
         let total_len = msg.contents.len();
-        let message_seq = self.message_seq.fetch_add(1, Ordering::Relaxed);
+        let (message_seq, _) = self.message_seq.overflowing_add(1);
+        self.message_seq = message_seq;
         let encoder = raptorq::Encoder::with_defaults(&msg.contents, IR_CHUNK_SIZE as u16);
         let repair_packets = (total_len / IR_CHUNK_SIZE) * 12 / 10; // 20% extra packets
         for packet in encoder.get_encoded_packets(repair_packets as u32) {
@@ -390,13 +391,13 @@ impl IrNetworkInterface<'_> {
     }
 
     /// Read packets until we assemble a message, then return it
-    async fn recv(&self) -> Result<Message<u16>, IrError> {
+    async fn recv(&mut self) -> Result<Message<u16>, IrError> {
         loop {
             let packet = self.receive_rx.receive().await;
             let sender = packet.sender;
             let recipient = packet.recipient;
-            let mut reconstructors = self.reconstructors.lock().await;
-            let reconstructor = reconstructors
+            let reconstructor = self
+                .reconstructors
                 .entry(sender)
                 .or_insert(IrMessageReconstructor::new(&packet));
             if let Some(p) = reconstructor.add_packet(packet) {
@@ -414,7 +415,7 @@ impl NetworkInterface for IrNetworkInterface<'_> {
     type Addr = u16;
     const BROADCAST: Self::Addr = 0;
 
-    async fn send_message(&self, msg: Message<u16>) -> Result<(), NetworkError> {
+    async fn send_message(&mut self, msg: Message<u16>) -> Result<(), NetworkError> {
         match self.send(msg).await {
             Ok(_) => (),
             Err(e) => log::error!("ir send: {e}"),
@@ -422,7 +423,7 @@ impl NetworkInterface for IrNetworkInterface<'_> {
         Ok(())
     }
 
-    async fn recv_message(&self) -> Result<Message<u16>, NetworkError> {
+    async fn recv_message(&mut self) -> Result<Message<u16>, NetworkError> {
         let msg = self
             .recv()
             .await

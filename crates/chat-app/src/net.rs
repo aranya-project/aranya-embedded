@@ -61,9 +61,9 @@ pub(crate) trait NetworkInterface {
     const BROADCAST: Self::Addr;
 
     /// Sends a message on the network.
-    async fn send_message(&self, msg: Message<Self::Addr>) -> Result<(), NetworkError>;
+    async fn send_message(&mut self, msg: Message<Self::Addr>) -> Result<(), NetworkError>;
     /// Waits until a message is received from the network.
-    async fn recv_message(&self) -> Result<Message<Self::Addr>, NetworkError>;
+    async fn recv_message(&mut self) -> Result<Message<Self::Addr>, NetworkError>;
     /// Gets the address of this node
     fn my_address(&self) -> Self::Addr;
 }

@@ -23,9 +23,13 @@ use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGua
 use embassy_time::{with_timeout, Duration, TimeoutError};
 use esp_println::println;
 
+#[cfg(feature = "net-esp-now")]
+use crate::net::espnow::EspNowNetworkInterface;
+#[cfg(feature = "net-irda")]
+use crate::net::irda::IrNetworkInterface;
 use crate::{
     aranya::{sink::PubSubSink, syncer::SyncEngine},
-    net::{espnow::EspNowNetworkInterface, NetworkInterface},
+    net::NetworkInterface,
     storage::imp::*,
 };
 
@@ -93,7 +97,10 @@ impl From<VmAction<'_>> for OwnedAction {
 
 pub struct Daemon<'a> {
     aranya: Client,
-    syncer: Option<SyncEngine<'a, EspNowNetworkInterface<'a>>>,
+    #[cfg(feature = "net-esp-now")]
+    syncer_esp_now: Option<SyncEngine<'a, EspNowNetworkInterface<'a>>>,
+    #[cfg(feature = "net-irda")]
+    syncer_ir: Option<SyncEngine<'a, IrNetworkInterface<'a>>>,
 }
 
 impl<'a> Daemon<'a> {
@@ -111,17 +118,31 @@ impl<'a> Daemon<'a> {
 
         Ok(Daemon {
             aranya,
-            syncer: None,
+            #[cfg(feature = "net-esp-now")]
+            syncer_esp_now: None,
+            #[cfg(feature = "net-irda")]
+            syncer_ir: None,
         })
     }
 
-    pub fn add_network_interface(
+    #[cfg(feature = "net-esp-now")]
+    pub fn add_esp_now_interface(
         &mut self,
         network_interface: EspNowNetworkInterface<'a>,
         graph_id: GraphId,
     ) {
         let syncer = SyncEngine::new(graph_id, network_interface);
-        self.syncer = Some(syncer);
+        self.syncer_esp_now = Some(syncer);
+    }
+
+    #[cfg(feature = "net-irda")]
+    pub fn add_irda_interface(
+        &mut self,
+        network_interface: IrNetworkInterface<'a>,
+        graph_id: GraphId,
+    ) {
+        let syncer = SyncEngine::new(graph_id, network_interface);
+        self.syncer_ir = Some(syncer);
     }
 
     pub async fn create_team(&mut self) -> Result<GraphId> {
@@ -140,7 +161,14 @@ impl<'a> Daemon<'a> {
 
     pub async fn run(&mut self, graph_id: GraphId) -> Result<()> {
         let mut sink = PubSubSink::new();
-        let syncer = self.syncer.as_mut().expect("No syncer configured");
+        #[cfg(feature = "net-esp-now")]
+        let syncer_esp_now = self
+            .syncer_esp_now
+            .as_mut()
+            .expect("No ESP Now syncer configured");
+        #[cfg(feature = "net-irda")]
+        let syncer_ir = self.syncer_ir.as_mut().expect("No IR syncer configured");
+
         loop {
             match with_timeout(Duration::from_millis(100), ACTION_IN_CHANNEL.receive()).await {
                 Ok(action) => {
@@ -148,13 +176,21 @@ impl<'a> Daemon<'a> {
                         .aranya
                         .action(graph_id, &mut sink, action.as_vmaction())
                     {
-                        Ok(_) => syncer.boost_hello(),
+                        Ok(_) => {
+                            #[cfg(feature = "net-esp-now")]
+                            syncer_esp_now.boost_hello();
+                            #[cfg(feature = "net-irda")]
+                            syncer_ir.boost_hello();
+                        }
                         Err(err) => println!("Error from action: {err}"),
                     }
                 }
                 Err(TimeoutError) => (),
             }
-            syncer.process(&mut self.aranya).await;
+            #[cfg(feature = "net-esp-now")]
+            syncer_esp_now.process(&mut self.aranya).await;
+            #[cfg(feature = "net-irda")]
+            syncer_ir.process(&mut self.aranya).await;
         }
     }
 }
