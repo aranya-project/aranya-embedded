@@ -22,10 +22,7 @@ use crate::{
     aranya::daemon::{PE, SP},
     aranya::error::Result,
     net::{Message, NetworkInterface},
-    Imp,
 };
-
-type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;
 
 const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
 
@@ -40,8 +37,6 @@ pub enum SyncMessageType {
 pub struct HelloMessage<N>
 where
     N: NetworkInterface,
-    //N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>, {
-    //N::Addr: Default + Ord + serde::Serialize + serde::Deserialize, {
 {
     address: N::Addr,
     head: Address,

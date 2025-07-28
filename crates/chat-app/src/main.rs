@@ -15,7 +15,7 @@ mod storage;
 mod util;
 mod watchdog;
 
-use aranya::daemon::{Daemon, Imp};
+use aranya::daemon::Daemon;
 use aranya_crypto::{DeviceId, Rng};
 use aranya_runtime::{vm_action, GraphId};
 use embassy_executor::Spawner;

@@ -159,67 +159,9 @@ impl<'a> Daemon<'a> {
     }
 }
 
-/// A shareable interface to the client that works on a single GraphId.
-pub struct Imp<S: Sink<VmEffect>> {
-    client: Arc<Mutex<Client>>,
-    graph_id: GraphId,
-    sink: Mutex<S>,
-}
-
-impl<S: Sink<VmEffect>> Imp<S> {
-    /// Lock the client and return a MutexGuard for it.
-    pub async fn get_client(&self) -> MutexGuard<'_, CriticalSectionRawMutex, Client> {
-        self.client.lock().await
-    }
-
-    pub fn graph_id(&self) -> GraphId {
-        self.graph_id
-    }
-
-    pub async fn add_commands(
-        &self,
-        cmds: &[impl Command + core::fmt::Debug],
-        trx: &mut Option<Transaction<SP, PE>>,
-        peer_cache: &mut PeerCache,
-    ) -> Result<()> {
-        let mut client = self.get_client().await;
-        let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
-        let mut sink = self.sink.lock().await;
-        dump_commands(cmds);
-        client.add_commands(trx, sink.deref_mut(), cmds)?;
-
-        // Update peer cache
-        let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-        let storage = client
-            .provider()
-            .get_storage(self.graph_id)
-            .map_err(|e| ClientError::StorageError(e))?;
-        for addr in addresses {
-            if let Some(cmd_loc) = storage
-                .get_location(addr)
-                .map_err(|e| ClientError::StorageError(e))?
-            {
-                peer_cache
-                    .add_command(storage, addr, cmd_loc)
-                    .map_err(|e| ClientError::StorageError(e))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    pub async fn commit(&self, mut trx: Transaction<SP, PE>) -> Result<()> {
-        let mut client = self.get_client().await;
-        let mut sink = self.sink.lock().await;
-        client.commit(&mut trx, sink.deref_mut())?;
-        Ok(())
-    }
-
-    pub async fn call_action(&self, action: aranya_runtime::VmAction<'_>) -> Result<()> {
-        let mut aranya = self.get_client().await;
-        let mut sink = self.sink.lock().await;
-        Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
-    }
+#[embassy_executor::task]
+pub async fn daemon_task(mut daemon: Daemon<'static>, graph_id: GraphId) {
+    daemon.run(graph_id).await.expect("daemon failed");
 }
 
 fn dump_commands(cmds: &[impl Command]) {
@@ -231,21 +173,4 @@ fn dump_commands(cmds: &[impl Command]) {
             c.max_cut().unwrap()
         );
     }
-}
-
-/* TODO(chip): when we have an async version of Actor
-impl Actor for Imp {
-    fn call_action(
-        &mut self,
-        action: aranya_runtime::VmAction<'_>,
-    ) -> Result<(), aranya_runtime::ClientError> {
-        let mut aranya = embassy_futures::block_on(self.get_client());
-        let mut sink = DebugSink {};
-        aranya.action(self.graph_id, &mut sink, action)
-    }
-} */
-
-#[embassy_executor::task]
-pub async fn daemon_task(mut daemon: Daemon<'static>, graph_id: GraphId) {
-    daemon.run(graph_id).await.expect("daemon failed");
 }

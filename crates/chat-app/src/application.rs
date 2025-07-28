@@ -16,7 +16,7 @@ use serde::{Deserialize, Serialize};
 use crate::{
     application::serial::{SerialCommand, SerialResponse},
     aranya::{
-        daemon::{Daemon, Imp, ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
+        daemon::{Daemon, ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
         policy::MessageReceived,
         sink::DebugSink,
     },
