@@ -20,6 +20,7 @@ pub mod imp {
 
 use thiserror::Error;
 
+#[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum StorageError {
     #[error("no data partition found")]

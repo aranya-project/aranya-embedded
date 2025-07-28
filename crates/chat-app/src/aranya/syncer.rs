@@ -6,18 +6,16 @@ use alloc::vec;
 use alloc::{boxed::Box, collections::btree_map::BTreeMap};
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    linear::LinearSegment, Address, GraphId, Location, PeerCache, Segment, Storage,
-    StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
-    Transaction, MAX_SYNC_MESSAGE_SIZE,
+    Address, GraphId, PeerCache, Segment, Storage, StorageProvider, SyncError, SyncRequestMessage,
+    SyncRequester, SyncResponder, SyncType, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use aranya_runtime::{ClientError, Command};
 use embassy_futures::poll_once;
-use embassy_futures::select::{select, Either};
-use embassy_time::{with_timeout, Duration, Instant, Timer};
+use embassy_time::{Duration, Instant};
 use parameter_store::MAX_PEERS;
 
 use crate::aranya::daemon::Client;
-use crate::aranya::sink::{DebugSink, PubSubSink};
+use crate::aranya::sink::PubSubSink;
 use crate::{
     aranya::daemon::{PE, SP},
     aranya::error::Result,
@@ -34,7 +32,7 @@ pub enum SyncMessageType {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct HelloMessage<N>
+pub(crate) struct HelloMessage<N>
 where
     N: NetworkInterface,
 {
@@ -44,7 +42,7 @@ where
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct SyncMessage {
+pub(crate) struct SyncMessage {
     t: SyncMessageType,
     bytes: Box<[u8]>,
 }
@@ -88,7 +86,7 @@ struct SyncSession<A> {
 }
 
 /// Aranya client.
-pub struct SyncEngine<'a, N>
+pub(crate) struct SyncEngine<'a, N>
 where
     N: NetworkInterface,
 {

@@ -9,10 +9,6 @@ use embassy_futures::{
     join::join,
     select::{select, Either},
 };
-use embassy_sync::{
-    blocking_mutex::raw::CriticalSectionRawMutex,
-    channel::{Receiver, Sender},
-};
 use embassy_time::Instant;
 use embassy_usb::{class::cdc_acm, driver::EndpointError, Builder};
 use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
@@ -90,12 +86,10 @@ enum SerialCommandState {
     Data,
 }
 
-const NUL: u8 = 0x00;
 const SOH: u8 = 0x01;
 const STX: u8 = 0x02;
 const ETX: u8 = 0x03;
 const EOT: u8 = 0x04;
-const LF: u8 = 0x0A;
 const CR: u8 = 0x0D;
 const SUB: u8 = 0x01A;
 const ESC: u8 = 0x1B;
@@ -226,7 +220,7 @@ impl<'d, 'a> SerialCommandEngine<'d, 'a> {
                 u64::from_str_radix(data, 10).expect("bad instant"),
             )),
             _ => {
-                esp_println::println!("Unknown serial command `{command}`");
+                println!("Unknown serial command `{command}`");
                 return;
             }
         };

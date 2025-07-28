@@ -1,6 +1,5 @@
 use alloc::vec::Vec;
 use aranya_runtime::{Sink, VmEffect};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, pubsub::Publisher};
 
 use crate::aranya::daemon::EFFECT_OUT_CHANNEL;
 

@@ -7,27 +7,27 @@ use alloc::{
     string::{String, ToString},
 };
 
-use aranya_crypto::{DeviceId, Id, Rng};
+use aranya_crypto::{DeviceId, Id};
 use aranya_policy_vm::Text;
-use aranya_runtime::{vm_action, GraphId, Sink, VmEffect};
+use aranya_runtime::vm_action;
 use embassy_futures::select::{select3, Either3};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, channel};
 use embassy_time::Instant;
 use esp_println::println;
-use parameter_store::MAX_PEERS;
-use serde::{Deserialize, Serialize};
 
 use crate::{
     application::serial::{SerialCommand, SerialResponse},
     aranya::{
-        daemon::{Daemon, ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
+        daemon::{ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
         policy::MessageReceived,
-        sink::DebugSink,
     },
     hardware::neopixel::{NeopixelState, NEOPIXEL_SIGNAL},
 };
 
-type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, 2>;
+type Channel<T> = embassy_sync::channel::Channel<
+    embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex,
+    T,
+    2,
+>;
 
 pub static SERIAL_IN_CHANNEL: Channel<SerialCommand> = Channel::new();
 pub static SERIAL_OUT_CHANNEL: Channel<SerialResponse> = Channel::new();
@@ -55,18 +55,15 @@ impl From<MessageReceived> for ChatMessage {
 pub struct Application {
     device_id: DeviceId,
     chat_buffer: heapless::spsc::Queue<Box<ChatMessage>, 100>,
-    sink_recv: Channel<MessageReceived>,
     unseen_count: usize,
     mentioned: bool,
 }
 
 impl Application {
     pub fn new(device_id: DeviceId) -> Application {
-        let sink_recv = channel::Channel::new();
         Application {
             device_id,
             chat_buffer: heapless::spsc::Queue::new(),
-            sink_recv,
             unseen_count: 0,
             mentioned: false,
         }

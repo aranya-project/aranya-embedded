@@ -35,7 +35,7 @@
 
 use core::io::BorrowedBuf;
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use crc::{self, Crc};

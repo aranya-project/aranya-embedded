@@ -1,9 +1,5 @@
-use core::ops::DerefMut;
-
 use alloc::{
     borrow::{Cow, ToOwned},
-    string::String,
-    sync::Arc,
     vec::Vec,
 };
 use aranya_crypto::{
@@ -17,12 +13,10 @@ use aranya_crypto::{
 };
 use aranya_policy_vm::{Identifier, Value};
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
-    PeerCache, Sink, Storage, StorageProvider, Transaction, VmAction, VmEffect,
+    linear::LinearStorageProvider, vm_action, ClientState, GraphId, VmAction, VmEffect,
 };
-use embassy_futures::select::{select, Either};
-use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
-use embassy_time::{with_timeout, Duration, TimeoutError};
+use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
+use embassy_time::{with_timeout, Duration};
 use esp_println::println;
 
 #[cfg(feature = "net-esp-now")]
@@ -31,7 +25,6 @@ use crate::net::espnow::EspNowNetworkInterface;
 use crate::net::irda::IrNetworkInterface;
 use crate::{
     aranya::{sink::PubSubSink, syncer::SyncEngine},
-    net::NetworkInterface,
     storage::imp::*,
 };
 
@@ -57,8 +50,6 @@ pub(crate) type Client = ClientState<PE, SP>;
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
 
-type Mutex<T> =
-    embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex, T>;
 type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, 10>;
 pub type PubSubChannel<T> =
     embassy_sync::pubsub::PubSubChannel<CriticalSectionRawMutex, T, 10, 1, 4>;
@@ -200,15 +191,4 @@ impl<'a> Daemon<'a> {
 #[embassy_executor::task]
 pub async fn daemon_task(mut daemon: Daemon<'static>, graph_id: GraphId) {
     daemon.run(graph_id).await.expect("daemon failed");
-}
-
-fn dump_commands(cmds: &[impl Command]) {
-    for c in cmds {
-        log::info!(
-            "  priority {:?} {} MAX_CUT {}",
-            c.priority(),
-            c.id(),
-            c.max_cut().unwrap()
-        );
-    }
 }

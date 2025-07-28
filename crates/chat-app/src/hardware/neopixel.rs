@@ -1,4 +1,3 @@
-use aranya_runtime::{Sink, VmEffect};
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, signal::Signal};
 
 #[derive(Debug, Default)]

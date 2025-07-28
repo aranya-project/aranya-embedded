@@ -1,6 +1,5 @@
 use aranya_crypto::keystore;
 use aranya_policy_vm::UnsupportedVersion;
-use aranya_runtime::StorageError;
 
 #[derive(Debug, thiserror::Error)]
 #[non_exhaustive]

@@ -466,7 +466,7 @@ where
         }
     }
 
-    fn remove(&mut self, id: GraphId) -> Result<(), AranyaStorageError> {
+    fn remove(&mut self, _id: GraphId) -> Result<(), AranyaStorageError> {
         unimplemented!()
     }
 }

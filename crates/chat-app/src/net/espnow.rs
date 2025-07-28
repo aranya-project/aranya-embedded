@@ -25,17 +25,16 @@
 //! ```
 //!
 
-use esp_hal::gpio::Input;
 use esp_wifi::esp_now::{EspNowReceiver, EspNowSender, BROADCAST_ADDRESS};
 
 use core::io::BorrowedBuf;
 use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_time::{Duration, Instant, Timer};
+use embassy_time::{Instant, Timer};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
@@ -154,7 +153,6 @@ pub(crate) struct EspNowNetworkEngine<'a> {
     sender: Mutex<EspNowSender<'a>>,
     receiver: Mutex<EspNowReceiver<'a>>,
     my_address: u16,
-    input_buf: Mutex<[u8; ESP_NOW_PACKET_SIZE]>,
     send_channel: Channel<EspNowPacket>,
     receive_channel: Channel<EspNowPacket>,
     last_rx: AtomicU32,
@@ -171,7 +169,6 @@ impl<'o> EspNowNetworkEngine<'o> {
             sender,
             receiver,
             my_address,
-            input_buf: Mutex::new([0u8; ESP_NOW_PACKET_SIZE]),
             send_channel: Channel::new(),
             receive_channel: Channel::new(),
             last_rx: AtomicU32::new(0),

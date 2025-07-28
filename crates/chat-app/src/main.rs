@@ -17,17 +17,18 @@ mod watchdog;
 
 use aranya::daemon::Daemon;
 use aranya_crypto::{DeviceId, Rng};
-use aranya_runtime::{vm_action, GraphId};
 use embassy_executor::Spawner;
 #[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
-use embassy_time::{Duration, TimeoutError, Timer};
+use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{AnyPin, GpioPin, Input, Level, Output, Pull};
+use esp_hal::gpio::{AnyPin, Input, Pull};
+#[cfg(any(feature = "net-irda", feature = "storage-sd"))]
+use esp_hal::gpio::{Level, Output};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
-use esp_hal::peripherals::{TIMG0, TIMG1};
+use esp_hal::peripherals::TIMG1;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
 use esp_rmt_neopixel::{Neopixel, RgbU8};
@@ -39,19 +40,14 @@ use log::info;
 use esp_irda_transceiver::IrdaTransceiver;
 
 #[cfg(feature = "net-esp-now")]
-use esp_wifi::{
-    esp_now::{EspNowManager, EspNowReceiver, EspNowSender, PeerInfo, BROADCAST_ADDRESS},
-    init, EspWifiController,
-};
+use esp_wifi::{esp_now::EspNowManager, init, EspWifiController};
 
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters};
 use static_cell::StaticCell;
 
-use crate::application::serial::{SerialCommand, SerialResponse};
 use crate::application::BUTTON_CHANNEL;
 use crate::hardware::neopixel::NeopixelState;
 use crate::watchdog::Watchdog;
-use aranya::sink::DebugSink;
 use net::NetworkEngine;
 
 const MAX_NETWORK_ENGINES: usize = 2;
@@ -81,6 +77,7 @@ async fn main(spawner: Spawner) {
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
+    #[cfg(any(feature = "net-irda", feature = "storage-sd"))]
     let mut acc_power = board_def
         .accessory_power
         .map(|pin| Output::new(pin, Level::Low));
@@ -174,8 +171,6 @@ async fn main(spawner: Spawner) {
 
     #[cfg(feature = "net-esp-now")]
     {
-        use crate::aranya::syncer::SyncEngine;
-
         let rng = esp_hal::rng::Rng::new(peripherals.RNG);
         let init = &*mk_static!(
             EspWifiController<'static>,
@@ -187,7 +182,7 @@ async fn main(spawner: Spawner) {
         log::info!("esp-now version {}", esp_now.version().unwrap());
 
         let (manager, sender, receiver) = esp_now.split();
-        let manager: &'static mut EspNowManager<'static> =
+        let _manager: &'static mut EspNowManager<'static> =
             mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
 
@@ -313,7 +308,6 @@ const MESSAGES_CURVE: [u8; 4] = [10, 20, 10, 0];
 
 #[embassy_executor::task]
 async fn led_task(mut neopixel: Neopixel<'static>) {
-    let mut intensity = 1.0;
     let mut state = NeopixelState::default();
     let mut phase = 0usize;
     let mut c = 0;

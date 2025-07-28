@@ -41,14 +41,6 @@ where
             contents: contents.into(),
         }
     }
-
-    pub fn new_to(recipient: A, contents: impl Into<Box<[u8]>>) -> Message<A> {
-        Message {
-            sender: Default::default(),
-            recipient,
-            contents: contents.into(),
-        }
-    }
 }
 
 /// A `NetworkInterface` is the object that a sync implementation uses to access the
