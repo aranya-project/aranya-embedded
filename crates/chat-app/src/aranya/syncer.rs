@@ -83,6 +83,7 @@ struct SyncSession<A> {
     requester: SyncRequester<A>,
     trx: Option<Transaction<SP, PE>>,
     last_seen: Instant,
+    peer_addr: A,
 }
 
 /// Aranya client.
@@ -92,8 +93,8 @@ where
 {
     graph_id: GraphId,
     network: N,
-    syncable_peers: heapless::FnvIndexSet<N::Addr, MAX_PEERS>,
-    sessions: BTreeMap<N::Addr, SyncSession<N::Addr>>,
+    sync_queue: heapless::FnvIndexSet<N::Addr, MAX_PEERS>,
+    sync_session: Option<SyncSession<N::Addr>>,
     peer_caches: BTreeMap<N::Addr, PeerCache>,
     sink: PubSubSink<'a>,
     hello_boost: u8,
@@ -109,8 +110,8 @@ where
         SyncEngine {
             graph_id,
             network,
-            syncable_peers: heapless::FnvIndexSet::new(),
-            sessions: BTreeMap::new(),
+            sync_queue: heapless::FnvIndexSet::new(),
+            sync_session: None,
             peer_caches: BTreeMap::new(),
             sink: PubSubSink::new(),
             hello_boost: 0,
@@ -132,28 +133,27 @@ where
         let mut send_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
 
         let (len, _) = {
-            let requester = match self.sessions.entry(peer_addr) {
-                btree_map::Entry::Vacant(entry) => {
-                    &mut entry
-                        .insert(SyncSession {
-                            requester: SyncRequester::new(self.graph_id, &mut Rng, server_addr),
-                            trx: None,
-                            last_seen: Instant::now(),
-                        })
-                        .requester
+            let requester = match &mut self.sync_session {
+                None => {
+                    self.sync_session = Some(SyncSession {
+                        requester: SyncRequester::new(self.graph_id, &mut Rng, server_addr),
+                        trx: None,
+                        last_seen: Instant::now(),
+                        peer_addr,
+                    });
+                    &mut self.sync_session.as_mut().unwrap().requester
                 }
-                btree_map::Entry::Occupied(entry) => {
-                    let last_seen = entry.get().last_seen;
-                    if Instant::now() - last_seen > SYNC_STALL_TIMEOUT {
+                Some(ref mut session) => {
+                    if Instant::now() - session.last_seen > SYNC_STALL_TIMEOUT {
                         log::info!("sync_peer: sync stalled for {peer_addr}");
-                        // sync is stalled. Commit any progress so far and remove this entry
-                        let mut ses = entry.remove();
-                        if let Some(trx) = &mut ses.trx {
+                        // sync is stalled. Commit any progress so far and close the session
+                        if let Some(trx) = &mut session.trx {
                             client.commit(trx, &mut self.sink)?;
                         }
-                        self.syncable_peers.remove(&peer_addr);
+                        self.sync_session = None;
+                        self.sync_queue.remove(&peer_addr);
                     }
-                    // Otherwise, we wait for this sync to proceed
+                    // Otherwise, we return and wait for this sync to proceed
                     return Ok(());
                 }
             };
@@ -181,11 +181,10 @@ where
         }
         // we have to make a copy of this list otherwise we're borrowing
         // &self inside the loop where we need to do self.sync_peer()
-        let peers: heapless::Vec<N::Addr, MAX_PEERS> =
-            self.syncable_peers.iter().cloned().collect();
-        for peer in peers {
+        if let Some(peer) = self.sync_queue.first().cloned() {
             if let Err(err) = self.sync_peer(peer, client).await {
                 log::error!("Could not initiate sync with {peer}: {err}");
+                self.sync_queue.remove(&peer);
             }
         }
     }
@@ -272,10 +271,14 @@ where
         bytes: &[u8],
         client: &mut Client,
     ) -> Result<()> {
-        let req_session = self
-            .sessions
-            .get_mut(&from)
-            .ok_or(SyncError::SessionMismatch)?;
+        let Some(req_session) = &mut self.sync_session else {
+            log::error!("Got response from {from} without active session");
+            return Err(SyncError::SessionMismatch.into());
+        };
+        if req_session.peer_addr != from {
+            log::error!("Response from {from} is not the active sync session (should be {})", req_session.peer_addr);
+            return Err(SyncError::SessionMismatch.into());
+        }
         req_session.last_seen = Instant::now();
         let requester = &mut req_session.requester;
 
@@ -296,7 +299,7 @@ where
             // We're done, destroy the requester
             log::info!("process_response: sync ended with {from}");
             // SAFETY: we know the session exists because we've been using it
-            let mut req_session = self.sessions.remove(&from).unwrap();
+            let mut req_session = self.sync_session.take().unwrap();
             if let Some(trx) = &mut req_session.trx {
                 log::info!("process_response: commiting");
                 client.commit(trx, &mut self.sink)?;
@@ -304,6 +307,7 @@ where
             } else {
                 log::error!("process_response: No transaction!!")
             }
+            self.sync_queue.remove(&from);
         }
 
         Ok(())
@@ -349,16 +353,11 @@ where
                 };
 
                 if has_address {
-                    self.syncable_peers.remove(&hello.address);
+                    // We're already caught up; remove this from the queue
+                    self.sync_queue.remove(&hello.address);
                 } else {
-                    if self.syncable_peers.len() == MAX_PEERS {
-                        // remove the first peer
-                        // SAFETY: the peer definitely exists because the map is full
-                        let peer = self.syncable_peers.first().unwrap().clone();
-                        self.syncable_peers.remove(&peer);
-                    }
-                    // SAFETY: we have guaranteed there is space above
-                    self.syncable_peers.insert(hello.address).ok();
+                    // If there is not enough space, we intentionally drop the hello
+                    self.sync_queue.insert(hello.address).ok();
                 }
             }
         }
