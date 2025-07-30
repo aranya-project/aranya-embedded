@@ -171,6 +171,8 @@ async fn main(spawner: Spawner) {
 
     #[cfg(feature = "net-esp-now")]
     {
+        use esp_hal::gpio::{Level, Output};
+
         let rng = esp_hal::rng::Rng::new(peripherals.RNG);
         let init = &*mk_static!(
             EspWifiController<'static>,
@@ -185,10 +187,12 @@ async fn main(spawner: Spawner) {
         let _manager: &'static mut EspNowManager<'static> =
             mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
-
         let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
+        let tx_led = Output::new(peripherals.GPIO10, Level::Low);
+        let rx_led = Output::new(peripherals.GPIO11, Level::Low);
 
-        let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
+        let engine =
+            net::espnow::start(sender, receiver, parameter_values.address, tx_led, rx_led).await;
 
         daemon.add_esp_now_interface(engine.interface(), graph_id);
 
