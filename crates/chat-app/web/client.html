@@ -96,7 +96,8 @@ button:disabled, input:disabled, textarea:disabled {
 <script>
 var port = null,
     last_seen = 0,
-    message_getter_handle = null;
+    message_getter_handle = null,
+    cmd_in_progress = false;
 var petnames = {};
 
 async function connect() {
@@ -122,6 +123,12 @@ function start_polling() {
 
 function delay(ms) {
   return new Promise((resolve, reject) => setTimeout(resolve, ms));
+}
+
+function later(ms, fn) {
+  return new Promise((resolve, reject) => {
+    setTimeout(async () => resolve(await fn()), ms);
+  });
 }
 
 async function getmessages() {
@@ -192,10 +199,25 @@ function save_petnames() {
 }
 
 async function docmd(name, data) {
+  if (port == null) {
+    console.error('port is null');
+    return;
+  } else if (!port.connected) {
+    console.error('port is not connected')
+    return;
+  } else if (cmd_in_progress) {  // Some other command is happening, wait a sec and retry
+    console.log(`${name} waiting`);
+    return await later(50, () => {
+      return docmd(name, data);
+    });
+  }
+  cmd_in_progress = true;
+
   try {
     await port.open({ baudRate: 115200 });
   } catch (e) {
     disconnect();
+    cmd_in_progress = false;
     throw `serial port is gone: ${e}`;
   }
   let wr = port.writable.getWriter();
@@ -206,6 +228,10 @@ async function docmd(name, data) {
   let rname = [], rdata = [];
   let r = await rd.read(new Uint8Array(1));
   if (r.value[0] != 1) {
+    rd.releaseLock();
+    wr.releaseLock();
+    await port.close();
+    cmd_in_progress = false;
     throw 'Invalid message read';
   }
   r = await rd.read(new Uint8Array(1));
@@ -222,6 +248,7 @@ async function docmd(name, data) {
   rd.releaseLock();
   wr.releaseLock();
   await port.close();
+  cmd_in_progress = false;
 
   let td = new TextDecoder('utf8');
   return { name: td.decode(new Uint8Array(rname)), data: td.decode(new Uint8Array(rdata)) };
