@@ -25,6 +25,7 @@
 //! ```
 //!
 
+use esp_hal::gpio::Output;
 use esp_wifi::esp_now::{EspNowReceiver, EspNowSender, BROADCAST_ADDRESS};
 
 use core::io::BorrowedBuf;
@@ -156,6 +157,7 @@ pub(crate) struct EspNowNetworkEngine<'a> {
     send_channel: Channel<EspNowPacket>,
     receive_channel: Channel<EspNowPacket>,
     last_rx: AtomicU32,
+    leds: Mutex<(Output<'a>, Output<'a>)>, // tx, rx
 }
 
 impl<'o> EspNowNetworkEngine<'o> {
@@ -164,6 +166,8 @@ impl<'o> EspNowNetworkEngine<'o> {
         sender: Mutex<EspNowSender<'o>>,
         receiver: Mutex<EspNowReceiver<'o>>,
         my_address: u16,
+        tx_led: Output<'o>,
+        rx_led: Output<'o>,
     ) -> EspNowNetworkEngine<'o> {
         EspNowNetworkEngine {
             sender,
@@ -172,6 +176,7 @@ impl<'o> EspNowNetworkEngine<'o> {
             send_channel: Channel::new(),
             receive_channel: Channel::new(),
             last_rx: AtomicU32::new(0),
+            leds: Mutex::new((tx_led, rx_led)),
         }
     }
 
@@ -182,6 +187,8 @@ impl<'o> EspNowNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: EspNowPacket) -> Result<u16, EspNowError> {
+        self.leds.lock().await.0.set_high();
+
         let mut output_buf: [MaybeUninit<u8>; ESP_NOW_PACKET_SIZE] =
             [MaybeUninit::uninit(); ESP_NOW_PACKET_SIZE];
         let mut bb = BorrowedBuf::from(&mut output_buf[..]);
@@ -222,6 +229,7 @@ impl<'o> EspNowNetworkEngine<'o> {
     async fn recv_packet(&self) -> Result<EspNowPacket, EspNowError> {
         loop {
             let received = self.receiver.lock().await.receive_async().await;
+            self.leds.lock().await.1.set_high();
             let receive_data = received.data();
             log::debug!("EspNow: reseave info {:?}", received.info);
 
@@ -299,9 +307,11 @@ impl<'o> EspNowNetworkEngine<'o> {
 
             match self.send_packet(packet).await {
                 Ok(crc) => {
+                    self.leds.lock().await.0.set_low();
                     Timer::after_millis(Self::random_delay(crc) as u64).await;
                 }
                 Err(e) => {
+                    self.leds.lock().await.0.set_low();
                     log::error!("EspNow: send error: {e}");
                     Timer::after_millis(SEND_RETRY_DELAY_MS).await;
                 }
@@ -317,6 +327,7 @@ impl<'o> EspNowNetworkEngine<'o> {
                     log::error!("EspNow: recv error: {e}");
                 }
             }
+            self.leds.lock().await.1.set_low();
         }
     }
 }
@@ -424,9 +435,11 @@ pub(crate) async fn start(
     sender: Mutex<EspNowSender<'static>>,
     receiver: Mutex<EspNowReceiver<'static>>,
     my_address: u16,
+    tx_led: Output<'static>,
+    rx_led: Output<'static>,
 ) -> &'static EspNowNetworkEngine<'static> {
     mk_static!(
         EspNowNetworkEngine,
-        EspNowNetworkEngine::new(sender, receiver, my_address)
+        EspNowNetworkEngine::new(sender, receiver, my_address, tx_led, rx_led)
     )
 }
