@@ -200,7 +200,7 @@ function add_message(id, text) {
   let msgbox_div = document.createElement('div');
   let petname = get_petname(id);
   msgbox_div.className = 'msgbox';
-  msgbox_div.innerHTML = `<div class="id" title="${id}"><a href="#" onclick="set_petname('${id}')">${petname}</a></div><div class="text">${text}</div>`;
+  msgbox_div.innerHTML = `<div class="id" title="${id}"><a href="#" onclick="set_petname('${id}')">${petname}</a> <a href="#" onclick="mention('${id}')">mention</a></div><div class="text">${text}</div>`;
   output.insertBefore(msgbox_div, output.firstChild);
 }
 
@@ -208,6 +208,12 @@ var n = 0;
 function fake_message() {
   add_message('01234567abcdef', `Hello this is message ${n} how is everyone?\nThis is a newline.`);
   n++;
+}
+
+function mention(id) {
+  const chat_input = document.querySelector('#chat_input');
+  chat_input.value += id.slice(0, 8) + ' ';
+  chat_input.focus();
 }
 
 async function send() {

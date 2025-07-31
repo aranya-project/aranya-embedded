@@ -15,6 +15,7 @@ use aranya_runtime::{vm_action, CommandId, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;
+use spideroak_base58::ToBase58;
 
 use crate::{
     application::serial::{SerialCommand, SerialResponse},
@@ -89,6 +90,8 @@ impl Application {
         let mut effect_subscriber = EFFECT_OUT_CHANNEL
             .subscriber()
             .expect("application could not get subscriber slot");
+        let mut truncated_device_id: heapless::String<8> =
+            self.device_id.to_base58().chars().take(8).collect();
 
         loop {
             let selected = select3(
@@ -112,7 +115,11 @@ impl Application {
                                 self.chat_buffer.dequeue();
                             }
                             if chatmsg.author != self.device_id {
-                                self.unseen_count += 1;
+                                if chatmsg.msg.contains(truncated_device_id.as_str()) {
+                                    self.mentioned = true;
+                                } else {
+                                    self.unseen_count += 1;
+                                }
                                 self.update_neopixel();
                             }
                             if !self.chat_buffer.iter().any(|msg| msg.id == command_id) {
@@ -147,8 +154,6 @@ impl Application {
                             SERIAL_OUT_CHANNEL
                                 .send(SerialResponse::MessageData(msgs))
                                 .await;
-                            self.unseen_count = 0;
-                            self.mentioned = false;
                         }
                     }
                 }
