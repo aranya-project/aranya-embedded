@@ -124,9 +124,7 @@ async function connect() {
       { vendorId: 0x303A, productId: 0x3001 }
     ]
   });
-  await device.open();
-  await device.selectConfiguration(1);
-  await device.claimInterface(1);
+  await setup_device();
   start_polling();
 }
 
@@ -137,6 +135,12 @@ function disconnect() {
   if (message_getter_handle != null) {
     clearInterval(message_getter_handle);
   }
+}
+
+async function setup_device() {
+  await device.open();
+  await device.selectConfiguration(1);
+  await device.claimInterface(1);
 }
 
 function start_polling() {
@@ -281,13 +285,28 @@ window.addEventListener('load', async () => {
       localStorage.petnames = '{}';
     }
   }
+
+  navigator.usb.addEventListener('disconnect', event => {
+    if (event.device == device) {
+      console.error('USB disconnected');
+      disconnect();
+    }
+  });
+
+  navigator.usb.addEventListener('connect', async (event) => {
+    console.log('connected', event);
+    if (device == null) {
+      device = event.device;
+      await setup_device();
+      start_polling();
+    }
+  });
+
   let devices = await navigator.usb.getDevices();
   console.log(devices);
   if (devices.length > 0) {
     device = devices[0];
-    await device.open();
-    await device.selectConfiguration(1);
-    await device.claimInterface(1);
+    await setup_device();
     start_polling();
   }
 });
