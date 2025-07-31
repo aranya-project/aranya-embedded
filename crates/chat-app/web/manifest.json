@@ -1,0 +1,15 @@
+{
+  "short_name": "Aranya Chat",
+  "name": "Aranya Embedded Chat",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "128x128",
+      "type": "image/png"
+    }
+  ],
+  "start_url": ".",
+  "display": "standalone",
+  "theme_color": "#00D030",
+  "background_color": "#000000"
+}
