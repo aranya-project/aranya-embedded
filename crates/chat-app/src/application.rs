@@ -2,6 +2,8 @@ extern crate alloc;
 
 pub mod serial;
 
+use core::fmt;
+
 use alloc::{
     boxed::Box,
     string::{String, ToString},
@@ -9,7 +11,7 @@ use alloc::{
 
 use aranya_crypto::{DeviceId, Id};
 use aranya_policy_vm::Text;
-use aranya_runtime::vm_action;
+use aranya_runtime::{vm_action, CommandId, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;
@@ -33,22 +35,36 @@ pub static SERIAL_IN_CHANNEL: Channel<SerialCommand> = Channel::new();
 pub static SERIAL_OUT_CHANNEL: Channel<SerialResponse> = Channel::new();
 pub static BUTTON_CHANNEL: Channel<()> = Channel::new();
 
+#[derive(Debug, thiserror::Error)]
+pub struct NotMessageReceived();
+
+impl fmt::Display for NotMessageReceived {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "Not MessageReceived")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct ChatMessage {
     /// This timestamp does not store an authoritative time value, just
     /// a relative one for query purposes.
     ts: Instant,
-    author: Id,
+    id: CommandId,
+    author: DeviceId,
     msg: String,
 }
 
-impl From<MessageReceived> for ChatMessage {
-    fn from(value: MessageReceived) -> Self {
-        ChatMessage {
+impl TryFrom<VmEffect> for ChatMessage {
+    type Error = NotMessageReceived;
+
+    fn try_from(value: VmEffect) -> Result<Self, Self::Error> {
+        let mr: MessageReceived = value.fields.try_into().map_err(|_| NotMessageReceived())?;
+        Ok(ChatMessage {
             ts: Instant::now(),
-            author: value.author,
-            msg: value.msg.to_string(),
-        }
+            id: value.command,
+            author: mr.author.into(),
+            msg: mr.msg.to_string(),
+        })
     }
 }
 
@@ -88,16 +104,20 @@ impl Application {
                     }
                     match effect.name.as_str() {
                         "MessageReceived" => {
-                            let msg: MessageReceived =
-                                effect.fields.try_into().expect("not MessageReceived");
+                            let command_id = effect.command;
+                            let chatmsg: ChatMessage = effect
+                                .try_into()
+                                .expect("Got some effect other than MessageReceived somehow");
                             if self.chat_buffer.is_full() {
                                 self.chat_buffer.dequeue();
                             }
-                            if msg.author != self.device_id.into_id() {
+                            if chatmsg.author != self.device_id {
                                 self.unseen_count += 1;
                                 self.update_neopixel();
                             }
-                            self.chat_buffer.enqueue(Box::new(msg.into())).ok();
+                            if !self.chat_buffer.iter().any(|msg| msg.id == command_id) {
+                                self.chat_buffer.enqueue(Box::new(chatmsg)).ok();
+                            }
                         }
                         _ => (),
                     };
