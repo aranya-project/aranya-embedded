@@ -322,4 +322,9 @@ window.addEventListener('load', async () => {
     start_polling();
   }
 });
+
+const registration = navigator.serviceWorker.register('worker.js', {
+  scope: '/chat/',
+});
+console.log('registration', registration);
 </script>
