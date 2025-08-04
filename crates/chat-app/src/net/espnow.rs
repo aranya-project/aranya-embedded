@@ -246,7 +246,7 @@ impl<'o> EspNowNetworkEngine<'o> {
                 let mut sc = SliceCursor::new(&input_buf[0..ESP_NOW_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
                 if recipient != self.my_address && recipient != EspNowNetworkInterface::BROADCAST {
-                    log::info!(
+                    log::debug!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
                         recipient

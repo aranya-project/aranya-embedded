@@ -23,6 +23,8 @@ use crate::{
 };
 
 const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
+const BASE_SYNC_DELAY_US: u64 = 16000;
+const SYNC_BOOST_FACTOR: u8 = 7;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum SyncMessageType {
@@ -190,11 +192,11 @@ where
     }
 
     fn hello_timeout(&mut self) -> Duration {
-        Duration::from_millis(1000 >> self.hello_boost)
+        Duration::from_millis(BASE_SYNC_DELAY_US >> self.hello_boost)
     }
 
     pub fn boost_hello(&mut self) {
-        self.hello_boost = 3;
+        self.hello_boost = SYNC_BOOST_FACTOR;
         self.last_hello = Instant::from_ticks(0);
     }
 
