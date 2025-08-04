@@ -314,7 +314,7 @@ const MESSAGES_CURVE: [u8; 4] = [10, 20, 10, 0];
 async fn led_task(mut neopixel: Neopixel<'static>) {
     let mut state = NeopixelState::default();
     let mut phase = 0usize;
-    let mut c = 0;
+    let mut counter = 0;
     let mut output_color = RgbU8::default();
     let mut new_color = RgbU8::default();
 
@@ -328,13 +328,13 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
             Ok(ns) => {
                 state = ns;
                 phase = 0;
-                c = 10;
+                counter = 10;
             }
             Err(_) => {
-                if c > 0 {
-                    c -= 1;
+                if counter > 0 {
+                    counter -= 1;
                 }
-                log::debug!("neopixel: {state:?} phase:{phase} c:{c} output_color:{new_color:?}");
+                log::debug!("neopixel: {state:?} phase:{phase} c:{counter} output_color:{new_color:?}");
                 match phase {
                     // Idle
                     0 => {
@@ -343,15 +343,15 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
                     1 => {
                         if state.mentioned {
                             new_color = RgbU8 {
-                                red: MENTION_CURVE[c],
+                                red: MENTION_CURVE[counter],
                                 green: 0,
-                                blue: MENTION_CURVE[c],
+                                blue: MENTION_CURVE[counter],
                             };
                         }
                     }
                     2 => {
                         if state.unseen_count > 0 {
-                            let cc = c & 0x03;
+                            let cc = counter & 0x03;
                             new_color = RgbU8 {
                                 red: 0,
                                 green: MESSAGES_CURVE[cc],
@@ -361,9 +361,9 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
                     }
                     _ => unreachable!(),
                 }
-                if c == 0 {
+                if counter == 0 {
                     phase = (phase + 1) % 3;
-                    c = match phase {
+                    counter = match phase {
                         0 => 10,
                         1 => 8,
                         2 => {
