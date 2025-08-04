@@ -30,6 +30,8 @@ use crate::{
 
 use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
 
+const ACTION_BOOST: u8 = 7;
+
 // Use short names so we can more easily add generics.
 /// CE = Crypto Engine
 pub(crate) type CE = DefaultEngine;
@@ -171,7 +173,7 @@ impl<'a> Daemon<'a> {
                     {
                         Ok(_) => {
                             #[cfg(feature = "net-esp-now")]
-                            syncer_esp_now.boost_hello();
+                            syncer_esp_now.boost_hello(ACTION_BOOST, true);
                             #[cfg(feature = "net-irda")]
                             syncer_ir.boost_hello();
                         }

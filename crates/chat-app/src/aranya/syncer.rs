@@ -24,7 +24,8 @@ use crate::{
 
 const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
 const BASE_SYNC_DELAY_US: u64 = 16000;
-const SYNC_BOOST_FACTOR: u8 = 7;
+const SYNC_RESPONSE_BOOST: u8 = 4;
+const SYNC_FINISH_BOOST: u8 = 4;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub enum SyncMessageType {
@@ -195,9 +196,14 @@ where
         Duration::from_millis(BASE_SYNC_DELAY_US >> self.hello_boost)
     }
 
-    pub fn boost_hello(&mut self) {
-        self.hello_boost = SYNC_BOOST_FACTOR;
-        self.last_hello = Instant::from_ticks(0);
+    pub fn boost_hello(&mut self, factor: u8, immediate: bool) {
+        self.hello_boost = factor;
+
+        self.last_hello = if immediate {
+            Instant::from_ticks(0)
+        } else {
+            Instant::now() + self.hello_timeout()
+        };
     }
 
     async fn send_hello(&mut self, client: &mut Client) -> Result<()> {
@@ -263,6 +269,9 @@ where
             let msg = response_message.into_message(self.network.my_address(), from)?;
             self.network.send_message(msg).await?;
         }
+        // Peers only add us to their queue again if they get another hello message. Boost it a
+        // bit to make it more likely that happens.
+        self.boost_hello(SYNC_RESPONSE_BOOST, false);
 
         Ok(())
     }
@@ -278,7 +287,10 @@ where
             return Err(SyncError::SessionMismatch.into());
         };
         if req_session.peer_addr != from {
-            log::error!("Response from {from} is not the active sync session (should be {})", req_session.peer_addr);
+            log::error!(
+                "Response from {from} is not the active sync session (should be {})",
+                req_session.peer_addr
+            );
             return Err(SyncError::SessionMismatch.into());
         }
         req_session.last_seen = Instant::now();
@@ -310,6 +322,8 @@ where
                 log::error!("process_response: No transaction!!")
             }
             self.sync_queue.remove(&from);
+            // Boost hello after we've finished a sync
+            self.boost_hello(SYNC_FINISH_BOOST, true);
         }
 
         Ok(())
