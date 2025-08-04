@@ -79,7 +79,8 @@ impl<'s> Sink<VmEffect> for PubSubSink<'s> {
     fn consume(&mut self, effect: VmEffect) {
         self.publisher
             .try_publish(effect)
-            .expect("no space in publish queue");
+            .inspect_err(|_| log::error!("dropping effect - no space in publish queue"))
+            .ok();
     }
 
     fn rollback(&mut self) {}
