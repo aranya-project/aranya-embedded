@@ -52,11 +52,11 @@ type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
 
 type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, 10>;
 pub type PubSubChannel<T> =
-    embassy_sync::pubsub::PubSubChannel<CriticalSectionRawMutex, T, 10, 1, 4>;
+    embassy_sync::pubsub::PubSubChannel<CriticalSectionRawMutex, T, 20, 1, 4>;
 pub type Publisher<'a, T> =
-    embassy_sync::pubsub::Publisher<'a, CriticalSectionRawMutex, T, 10, 1, 4>;
+    embassy_sync::pubsub::Publisher<'a, CriticalSectionRawMutex, T, 20, 1, 4>;
 pub type Subscriber<'a, T> =
-    embassy_sync::pubsub::Subscriber<'a, CriticalSectionRawMutex, T, 10, 1, 4>;
+    embassy_sync::pubsub::Subscriber<'a, CriticalSectionRawMutex, T, 20, 1, 4>;
 
 // TODO(chip): use actual keys
 const NULL_KEY: [u8; 32] = [0u8; 32];
