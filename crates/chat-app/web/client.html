@@ -60,10 +60,6 @@ button:disabled, input:disabled, textarea:disabled {
 
 #chat_input {
   margin-right: 8px;
-  transition: all 100ms allow-discrete;
-}
-
-#chat_input:focus {
   height: 64px;
 }
 
@@ -93,10 +89,6 @@ button:disabled, input:disabled, textarea:disabled {
 }
 
 @media screen and (max-width: 400px) {
-  #chat_input {
-    height: 64px;
-  }
-
   .msgbox {
     width: 100%;
   }
@@ -107,6 +99,7 @@ button:disabled, input:disabled, textarea:disabled {
   <div>
     <button id="connect_button" onclick="connect()">Connect</button>
     <button id="disconnect_button" onclick="disconnect()" disabled>Disconnect</button>
+    <!--<button onclick="docmd('sendmsg', 'SPAM SPAM SPAM')">SPAM</button>-->
     <!--<button onclick="fake_message()">Fake message</button>-->
   </div>
   <div class="expand" id="output"></div>
