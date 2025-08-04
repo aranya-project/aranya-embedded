@@ -11,7 +11,13 @@ use embassy_futures::{
     select::{select, Either},
 };
 use embassy_time::Instant;
-use embassy_usb::{class::cdc_acm, driver::EndpointError, Builder};
+use embassy_usb::{
+    class::cdc_acm,
+    driver::EndpointError,
+    msos::{self, windows_version},
+    types::InterfaceNumber,
+    Builder,
+};
 use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
 use esp_println::println;
 
@@ -20,6 +26,7 @@ use crate::application::{SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL};
 
 const MAX_SERIAL_PACKET_SIZE: u16 = 64;
 const WEB_SOURCE: &'static str = include_str!("../../web/client.html");
+const DEVICE_INTERFACE_GUIDS: &[&str] = &["{63788892-2A36-4357-AFD0-008A6570D80A}"];
 
 #[derive(Debug)]
 pub enum SerialCommand {
@@ -53,18 +60,35 @@ pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19
 
     let mut config_descriptor = [0u8; 256];
     let mut bos_descriptor = [0u8; 256];
+    let mut msos_descriptor = [0u8; 256];
     let mut control_buf = [0u8; 64];
+
     let mut state = cdc_acm::State::new();
     let mut builder = Builder::new(
         driver,
         config,
         &mut config_descriptor,
         &mut bos_descriptor,
-        &mut [],
+        &mut msos_descriptor,
         &mut control_buf,
     );
 
+    builder.msos_descriptor(windows_version::WIN8_1, 2);
+
     let mut class = cdc_acm::CdcAcmClass::new(&mut builder, &mut state, MAX_SERIAL_PACKET_SIZE);
+
+    builder.msos_writer().configuration(0);
+    builder.msos_writer().function(InterfaceNumber(0));
+    builder
+        .msos_writer()
+        .function_feature(msos::CompatibleIdFeatureDescriptor::new("WINUSB", ""));
+    builder
+        .msos_writer()
+        .function_feature(msos::RegistryPropertyFeatureDescriptor::new(
+            "DeviceInterfaceGUIDs",
+            msos::PropertyData::RegMultiSz(DEVICE_INTERFACE_GUIDS),
+        ));
+
     let mut usb = builder.build();
     let usb_fut = usb.run();
 
