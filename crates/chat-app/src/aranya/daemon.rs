@@ -1,7 +1,3 @@
-use alloc::{
-    borrow::{Cow, ToOwned},
-    vec::Vec,
-};
 use aranya_crypto::{
     dangerous::spideroak_crypto::{
         aead::{Aead, AeadKey},
@@ -11,7 +7,6 @@ use aranya_crypto::{
     keystore::memstore::MemStore,
     CipherSuite,
 };
-use aranya_policy_vm::{Identifier, Value};
 use aranya_runtime::{
     linear::LinearStorageProvider, vm_action, ClientState, GraphId, VmAction, VmEffect,
 };
@@ -63,32 +58,8 @@ pub type Subscriber<'a, T> =
 // TODO(chip): use actual keys
 const NULL_KEY: [u8; 32] = [0u8; 32];
 
-pub static ACTION_IN_CHANNEL: Channel<OwnedAction> = Channel::new();
+pub static ACTION_IN_CHANNEL: Channel<VmAction<'static>> = Channel::new();
 pub static EFFECT_OUT_CHANNEL: PubSubChannel<VmEffect> = PubSubChannel::new();
-
-#[derive(Debug)]
-pub struct OwnedAction {
-    name: Identifier,
-    args: Vec<Value>,
-}
-
-impl OwnedAction {
-    pub fn as_vmaction(&self) -> VmAction<'_> {
-        VmAction {
-            name: self.name.clone(),
-            args: Cow::Borrowed(&self.args),
-        }
-    }
-}
-
-impl From<VmAction<'_>> for OwnedAction {
-    fn from(value: VmAction) -> Self {
-        OwnedAction {
-            name: value.name.to_owned(),
-            args: value.args.to_vec(),
-        }
-    }
-}
 
 pub struct Daemon<'a> {
     aranya: Client,
@@ -166,20 +137,15 @@ impl<'a> Daemon<'a> {
 
         loop {
             match with_timeout(Duration::from_millis(100), ACTION_IN_CHANNEL.receive()).await {
-                Ok(action) => {
-                    match self
-                        .aranya
-                        .action(graph_id, &mut sink, action.as_vmaction())
-                    {
-                        Ok(_) => {
-                            #[cfg(feature = "net-esp-now")]
-                            syncer_esp_now.boost_hello(ACTION_BOOST, true);
-                            #[cfg(feature = "net-irda")]
-                            syncer_ir.boost_hello();
-                        }
-                        Err(err) => println!("Error from action: {err}"),
+                Ok(action) => match self.aranya.action(graph_id, &mut sink, action) {
+                    Ok(_) => {
+                        #[cfg(feature = "net-esp-now")]
+                        syncer_esp_now.boost_hello(ACTION_BOOST, true);
+                        #[cfg(feature = "net-irda")]
+                        syncer_ir.boost_hello();
                     }
-                }
+                    Err(err) => println!("Error from action: {err}"),
+                },
                 Err(_) => (),
             }
             #[cfg(feature = "net-esp-now")]
@@ -193,4 +159,14 @@ impl<'a> Daemon<'a> {
 #[embassy_executor::task]
 pub async fn daemon_task(mut daemon: Daemon<'static>, graph_id: GraphId) {
     daemon.run(graph_id).await.expect("daemon failed");
+}
+
+#[macro_export]
+macro_rules! vm_action_owned {
+    ($name:ident($($arg:expr),* $(,)?)) => {
+        ::aranya_runtime::VmAction {
+            name: ::aranya_policy_vm::ident!(stringify!($name)),
+            args: ::alloc::vec![$(::aranya_policy_vm::Value::from($arg)),*].into(),
+        }
+    };
 }

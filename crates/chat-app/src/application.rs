@@ -9,9 +9,9 @@ use alloc::{
     string::{String, ToString},
 };
 
-use aranya_crypto::{DeviceId, Id};
+use aranya_crypto::DeviceId;
 use aranya_policy_vm::Text;
-use aranya_runtime::{vm_action, CommandId, VmEffect};
+use aranya_runtime::{CommandId, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;
@@ -24,6 +24,7 @@ use crate::{
         policy::MessageReceived,
     },
     hardware::neopixel::{NeopixelState, NEOPIXEL_SIGNAL},
+    vm_action_owned,
 };
 
 type Channel<T> = embassy_sync::channel::Channel<
@@ -135,7 +136,7 @@ impl Application {
                         SerialCommand::SendMessage(msg) => {
                             let msg: Text = msg.try_into().expect("invalid string");
                             ACTION_IN_CHANNEL
-                                .send(vm_action!(send_message(self.device_id, msg)).into())
+                                .send(vm_action_owned!(send_message(self.device_id, msg)).into())
                                 .await;
                             SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }
