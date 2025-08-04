@@ -5,6 +5,7 @@ use alloc::{
     vec::Vec,
 };
 use bytes::{BufMut, BytesMut};
+use core::fmt::Write;
 use embassy_futures::{
     join::join,
     select::{select, Either},
@@ -13,7 +14,6 @@ use embassy_time::Instant;
 use embassy_usb::{class::cdc_acm, driver::EndpointError, Builder};
 use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
 use esp_println::println;
-use spideroak_base58::ToBase58;
 
 use crate::application::ChatMessage;
 use crate::application::{SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL};
@@ -197,12 +197,15 @@ impl<'d, 'a> SerialCommandEngine<'d, 'a> {
                     SerialResponse::MessageData(d) => {
                         let mut msgbuf = BytesMut::with_capacity(256);
                         for cm in d {
-                            msgbuf.put_slice(cm.author.to_base58().as_bytes());
-                            msgbuf.put_u8(SP);
-                            msgbuf.put_slice(cm.ts.as_ticks().to_string().as_bytes());
-                            msgbuf.put_u8(SP);
-                            msgbuf.put_slice(cm.msg.as_bytes());
-                            msgbuf.put_slice(&[ETX]);
+                            write!(
+                                msgbuf,
+                                "{} {} {}{}",
+                                cm.author,
+                                cm.ts.as_ticks(),
+                                cm.msg,
+                                ETX as char
+                            )
+                            .expect("message should fit");
                         }
 
                         self.send_response("msgdata", &msgbuf).await?;

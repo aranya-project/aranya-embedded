@@ -1,6 +1,0 @@
-// Copy this file to `wifi.ron` in the local directory and fill in your values for the ESP32 access point
-
-BaseConfiguration(
-    ssid: "MyNetwork",
-    password: "MyPassword",
-)
