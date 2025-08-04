@@ -91,7 +91,7 @@ impl Application {
         let mut effect_subscriber = EFFECT_OUT_CHANNEL
             .subscriber()
             .expect("application could not get subscriber slot");
-        let mut truncated_device_id: heapless::String<8> =
+        let truncated_device_id: heapless::String<8> =
             self.device_id.to_base58().chars().take(8).collect();
 
         loop {

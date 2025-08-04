@@ -117,7 +117,6 @@ const EOT: u8 = 0x04;
 const CR: u8 = 0x0D;
 const SUB: u8 = 0x01A;
 const ESC: u8 = 0x1B;
-const SP: u8 = 0x20;
 
 fn valid_text_char(c: u8) -> bool {
     c == 0x07 || (c >= 0x09 && c <= 0x0D) || (c >= 0x20 && c < 0x7F)
