@@ -29,15 +29,15 @@ here](https://learn.microsoft.com/en-us/windows/wsl/connect-usb).
 ## Running
 
 Parameters will have to be set for the device's address and flashed to
-the device before it can communicate with other devices. You can set the
-address with:
+the device before it can communicate with other devices. The address is
+a 16-bit integer. You can set the address with:
 
 ```
 # (from the repository root)
-$ cargo run --bin aranya-embedded-config -- -c --ir-address N -c params.bin
+$ cargo run --bin aranya-embedded-config -- -c --ir-address <ADDRESS> -c params.bin
 ```
 
-Then you can flash them to the device with espflash:
+Then you can flash the parameter file to the device with espflash:
 
 ```
 $ espflash write-bin 0x9000 params.bin
@@ -51,7 +51,8 @@ orange briefly and it will show up as a serial device (except on
 Windows, where it shows up as a generic USB device for reasons explained
 below).
 
-You can then open `web/client.html` and connect to the device.
+You can then open `web/client.html` and connect to the device. Or go to
+[https://chip-so.github.io/chat/](https://chip-so.github.io/chat/).
 
 ## Windows shenanigans
 

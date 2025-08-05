@@ -88,14 +88,14 @@ Each node in the mesh has to have a unique address. Addresses in our
 ad-hoc ESP-NOW network are 16-bit unsigned integers, and 0 is reserved
 for broadcast.
 
-Ask the workshop organizers for an address, or pick one and ask if it's
-been used. For this example, we'll pick address 42.
+Ask the workshop organizers for an address, or pick one and ask if it
+has been used. For this example, we'll pick address 42.
 
 Change directory back to the repository root.
 
 ```
 ~/src/aranya-embedded/crates/chat-app$ cd ../..
-~/src/aranya-embedded$ cd ../..
+~/src/aranya-embedded$
 ```
 
 Run `aranya-embedded-config` to create a configuration for the device.
