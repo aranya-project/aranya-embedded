@@ -198,11 +198,9 @@ where
     pub fn boost_hello(&mut self, factor: u8, immediate: bool) {
         self.hello_boost = factor;
 
-        self.last_hello = if immediate {
-            Instant::from_ticks(0)
-        } else {
-            Instant::now() + self.hello_timeout()
-        };
+        if immediate {
+            self.last_hello = Instant::from_ticks(0)
+        }
     }
 
     async fn send_hello(&mut self, client: &mut Client) -> Result<()> {
