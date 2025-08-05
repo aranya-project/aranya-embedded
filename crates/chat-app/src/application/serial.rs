@@ -4,6 +4,7 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use aranya_crypto::DeviceId;
 use bytes::{BufMut, BytesMut};
 use core::fmt::Write;
 use embassy_futures::{
@@ -20,6 +21,7 @@ use embassy_usb::{
 };
 use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
 use esp_println::println;
+use spideroak_base58::ToBase58;
 
 use crate::application::ChatMessage;
 use crate::application::{SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL};
@@ -43,7 +45,7 @@ pub enum SerialResponse {
 }
 
 #[embassy_executor::task]
-pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19>) {
+pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19>, device_id: DeviceId) {
     let usb = otg_fs::Usb::new(usb0, usb_dp, usb_dm);
     let mut ep_out_buffer = [0u8; 1024];
     let config = otg_fs::asynch::Config::default();
@@ -52,7 +54,8 @@ pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19
     let mut config = embassy_usb::Config::new(0x303A, 0x3001);
     config.manufacturer = Some("SpiderOak");
     config.product = Some("Demo Board V2");
-    config.serial_number = Some("2");
+    let serial_number = device_id.to_base58();
+    config.serial_number = Some(&serial_number[..8]);
     config.device_class = 0xEF;
     config.device_sub_class = 0x02;
     config.device_protocol = 0x01;

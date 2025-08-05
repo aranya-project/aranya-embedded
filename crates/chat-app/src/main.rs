@@ -255,6 +255,7 @@ async fn main(spawner: Spawner) {
         peripherals.USB0,
         peripherals.GPIO20,
         peripherals.GPIO19,
+        device_id,
     ));
 
     spawner.must_spawn(button_task(board_def.button, parameters));
