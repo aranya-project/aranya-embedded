@@ -123,3 +123,5 @@ net-esp-now = [
     "dep:raptorq",
     "dep:crc",
 ]
+
+vendor-specific-usb = []

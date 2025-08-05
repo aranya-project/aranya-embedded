@@ -56,10 +56,20 @@ pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19
     config.product = Some("Demo Board V2");
     let serial_number = device_id.to_base58();
     config.serial_number = Some(&serial_number[..8]);
-    config.device_class = 0xEF;
-    config.device_sub_class = 0x02;
-    config.device_protocol = 0x01;
-    config.composite_with_iads = true;
+    #[cfg(feature = "vendor-specific-usb")]
+    {
+        config.device_class = 0xFF;
+        config.device_sub_class = 0x00;
+        config.device_protocol = 0x00;
+        config.composite_with_iads = false;
+    }
+    #[cfg(not(feature = "vendor-specific-usb"))]
+    {
+        config.device_class = 0xEF;
+        config.device_sub_class = 0x02;
+        config.device_protocol = 0x01;
+        config.composite_with_iads = true;
+    }
 
     let mut config_descriptor = [0u8; 256];
     let mut bos_descriptor = [0u8; 256];

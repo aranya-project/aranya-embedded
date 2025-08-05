@@ -54,7 +54,9 @@ below).
 You can then open `web/client.html` and connect to the device. Or go to
 [https://chip-so.github.io/chat/](https://chip-so.github.io/chat/).
 
-## Windows shenanigans
+## Platform-specific shenanigans
+
+### Windows 
 
 I think what's happening is that accessing USB devices through
 unprivileged applications requires that the devices use the WinUSB
@@ -63,3 +65,41 @@ this, so that it can be accessed via WebUSB. But this means it won't
 show up as a COM port. If you'd like to access it as a COM port instead,
 you can use something like [Zadig](https://zadig.akeo.ie/) to override
 the WinUSB device selection.
+
+Sometimes accessing it over WebUSB fails despite this. I don't know why.
+
+### Linux (and maybe Android)
+
+You will need to have read-write access to the usb device under
+`/dev/bus/usb/...`. This is probably not the case by default. You will
+probably have to add a udev rule to add access. Add this as a file under
+/etc/udev/rules.d, e.g. `50-spideroak-demo-board.rules`.
+
+```
+SUBSYSTEM=="usb", ATTR{idVendor}=="303a", ATTR{idProduct}=="3001", MODE="0664", GROUP="plugdev"
+```
+
+Then unplug and replug the device. `plugdev` is the group that has
+access to devices. If you're using an Ubuntu or Mint or something that's
+probably correct, but as always, YMMV.
+
+In the default configuration, the device will show up as a composite
+device with a CDC-ACM serial port. By default, Linux will bind the
+`cdc_acm` driver to this, which prevents Chrome from connecting to the
+interface. To unbind it, go to `/sys/bus/usb/drivers/cdc_acm` and find
+the devices listed. They'll look like `1-2:1.0` or similar. Echo these
+to the `unbind` file.
+
+```
+$ cd /sys/bus/usb/drivers/cdc_acm
+$ ls
+1-2:1.0  1-2:1.1  bind  module  new_id  remove_id  uevent  unbind
+$ sudo sh -c "echo '1-2:1.0' > unbind"
+```
+
+The interface should now be available to WebUSB.
+
+Alternatively, you can compile the project with the
+`vendor-specific-usb` feature flag, which will use the "Vendor specific"
+device class (0xFF), which doesn't bind to the `cdc_acm` driver. But
+then it won't show up as a serial port.
