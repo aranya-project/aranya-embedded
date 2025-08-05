@@ -112,7 +112,8 @@ async fn main(_spawner: Spawner) {
             'a': "Accessory power" => { accessory_power_test(&mut acc_driver).await },
             'q': "I2C/Qwiic" => { i2c_test(&mut acc_driver, &mut i2c).await },
             's': "SD/SPI" => { sd_test(&mut acc_driver, &mut peripherals.SPI2, &mut board_def.sd).await },
-            'i': "IR" => { ir_test(&mut acc_driver, &mut irts).await }
+            'i': "IR" => { ir_test(&mut acc_driver, &mut irts).await },
+            'g': "GPIO" => { gpio_test().await }
         );
     }
 }
@@ -322,6 +323,48 @@ async fn ir_test(acc_power: &mut Option<Output<'_>>, irts: &mut Option<IrdaTrans
     if let Some(acc_power) = acc_power {
         log::info!("Disabling accessory power");
         acc_power.set_low();
+    }
+}
+
+async fn gpio_test() {
+    // We're going to just steal the GPIOs since they should be unused
+    let mut gpio1 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(1) }, Level::Low);
+    let mut gpio2 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(2) }, Level::Low);
+    let mut gpio3 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(3) }, Level::Low);
+    let mut gpio6 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(6) }, Level::Low);
+    let mut gpio7 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(7) }, Level::Low);
+    let mut gpio8 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(8) }, Level::Low);
+    let mut gpio9 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(9) }, Level::Low);
+    let mut gpio10 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(10) }, Level::Low);
+    let mut gpio11 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(11) }, Level::Low);
+    let mut gpio12 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(12) }, Level::Low);
+    let mut gpio15 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(15) }, Level::Low);
+    let mut gpio16 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(16) }, Level::Low);
+    let mut gpio17 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(17) }, Level::Low);
+    let mut gpio18 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(18) }, Level::Low);
+    let mut gpio42 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(42) }, Level::Low);
+    let mut gpio46 = Output::new(unsafe { esp_hal::gpio::AnyPin::steal(46) }, Level::Low);
+
+    loop {
+        menu!("GPIO",
+            '1': "GPIO 1" => { gpio1.toggle(); },
+            '2': "GPIO 2" => { gpio2.toggle(); },
+            '3': "GPIO 3" => { gpio3.toggle(); },
+            '6': "GPIO 6" => { gpio6.toggle(); },
+            '7': "GPIO 7" => { gpio7.toggle(); },
+            '8': "GPIO 8" => { gpio8.toggle(); },
+            '9': "GPIO 9" => { gpio9.toggle(); },
+            '0': "GPIO 10" => { gpio10.toggle(); },
+            'a': "GPIO 11" => { gpio11.toggle(); },
+            'b': "GPIO 12" => { gpio12.toggle(); },
+            'f': "GPIO 15" => { gpio15.toggle(); },
+            'g': "GPIO 16" => { gpio16.toggle(); },
+            'h': "GPIO 17" => { gpio17.toggle(); },
+            'i': "GPIO 18" => { gpio18.toggle(); },
+            '!': "GPIO 42" => { gpio42.toggle(); },
+            '@': "GPIO 46" => { gpio46.toggle(); },
+            'x': "Exit" => { break; }
+        );
     }
 }
 

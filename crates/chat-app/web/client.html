@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" type="image/png" href="favicon.png">
+<link rel="manifest" href="manifest.json">
+<style>
+@font-face {
+  font-family: "PhoenixVGA 9x16";
+  src: local("PhoneixVGA 9x16"),
+       url("Web437_PhoenixVGA_9x16.woff") format("woff");
+}
+
+body {
+  background: black;
+  color: #00D030;
+  margin: 0;
+  font: 16px "PhoenixVGA 9x16", monospace;
+}
+
+a {
+  color: #00D060;
+}
+
+.container {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.container > div {
+  padding: 8px;
+}
+
+.expand {
+  flex: auto;
+}
+
+#input_form {
+  display: flex;
+  flex-direction: row;
+}
+
+button, input, textarea {
+  border: 1px solid #00D030;
+  background: black;
+  color: #00D030;
+  font: 16px "PhoenixVGA 9x16", monospace;
+}
+
+button:active {
+  border: 1px solid black;
+  background: #00D030;
+  color: black;
+}
+
+button:disabled, input:disabled, textarea:disabled {
+  border: 1px solid #008010;
+  color: #008010;
+}
+
+#chat_input {
+  margin-right: 8px;
+  height: 64px;
+}
+
+#output {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  align-content: flex-start;
+  gap: 8px;
+  overflow-y: auto;
+}
+
+.msgbox {
+  min-width: 320px;
+  border: 1px solid #00D030;
+  padding: 8px;
+}
+
+.msgbox .text {
+  margin-left: 18px;
+  white-space: pre-wrap;
+}
+
+.input_box {
+  border-top: 1px solid #00D030;
+}
+
+@media screen and (max-width: 400px) {
+  .msgbox {
+    width: 100%;
+  }
+}
+</style>
+
+<div class="container">
+  <div>
+    <button id="connect_button" onclick="connect()">Connect</button>
+    <button id="disconnect_button" onclick="disconnect()" disabled>Disconnect</button>
+    <!--<button onclick="docmd('sendmsg', 'SPAM SPAM SPAM')">SPAM</button>-->
+    <!--<button onclick="fake_message()">Fake message</button>-->
+  </div>
+  <div class="expand" id="output"></div>
+  <div class="input_box">
+    <form id="input_form" action=none onsubmit="send()">
+      <textarea rows=1 cols=80 id="chat_input" class="expand" maxlength=64 disabled></textarea>
+      <input type="submit" onclick="send()" value="Send" disabled>
+    </form>
+  </div>
+</div>
+
+<script>
+var device = null,
+    last_seen = 0,
+    message_getter_handle = null,
+    cmd_in_progress = false;
+var petnames = {};
+
+async function connect() {
+  device = await navigator.usb.requestDevice({
+    filters: [
+      { vendorId: 0x303A, productId: 0x3001 }
+    ]
+  });
+  await setup_device();
+  start_polling();
+}
+
+async function disconnect() {
+  if (device.opened) {
+    await device.close();
+  }
+  device = null;
+  document.querySelector('#connect_button').disabled = false;
+  document.querySelector('#disconnect_button').disabled = true;
+  document.querySelectorAll('#input_form > *').forEach(e => e.disabled = true);
+  if (message_getter_handle != null) {
+    clearInterval(message_getter_handle);
+  }
+}
+
+async function setup_device() {
+  await device.open();
+  await device.selectConfiguration(1);
+  await device.claimInterface(1);
+}
+
+function start_polling() {
+  document.querySelector('#connect_button').disabled = true;
+  document.querySelector('#disconnect_button').disabled = false;
+  document.querySelectorAll('#input_form > *').forEach(e => e.disabled = false);
+  getmessages();
+  message_getter_handle = setInterval(getmessages, 1000);
+}
+
+function delay(ms) {
+  return new Promise((resolve, reject) => setTimeout(resolve, ms));
+}
+
+function later(ms, fn) {
+  return new Promise((resolve, reject) => {
+    setTimeout(async () => resolve(await fn()), ms);
+  });
+}
+
+async function getmessages() {
+  let robj = await docmd('getmsgs', last_seen.toString());
+  let lines = robj.data.trim().split("\x03")
+    .filter(l => l != '')
+    .map(line => {
+      let m = line.match(/^([A-Za-z0-9]+) ([0-9]+) (.*)/s);
+      last_seen = parseInt(m[2]);
+      return { id: m[1], ts: last_seen, text: m[3] }
+    });
+  console.log(lines);
+  for (l of lines) {
+    add_message(l.id, l.text);
+  }
+}
+
+function get_petname(id) {
+  if (id in petnames) {
+    return petnames[id];
+  } else {
+    return id.slice(0, 8);
+  }
+}
+
+function add_message(id, text) {
+  let output = document.querySelector('#output');
+  let msgbox_div = document.createElement('div');
+  let petname = get_petname(id);
+  msgbox_div.className = 'msgbox';
+  msgbox_div.innerHTML = `<div class="id" title="${id}"><a href="#" onclick="set_petname('${id}')">${petname}</a> <a href="#" onclick="mention('${id}')">mention</a></div><div class="text">${text}</div>`;
+  output.insertBefore(msgbox_div, output.firstChild);
+}
+
+var n = 0;
+function fake_message() {
+  add_message('01234567abcdef', `Hello this is message ${n} how is everyone?\nThis is a newline.`);
+  n++;
+}
+
+function mention(id) {
+  const chat_input = document.querySelector('#chat_input');
+  chat_input.value += id.slice(0, 8) + ' ';
+  chat_input.focus();
+}
+
+async function send() {
+  event.preventDefault();
+  let chat_input = document.querySelector('#chat_input');
+  let t = chat_input.value;
+  chat_input.value = '';
+  document.querySelector('input[type=submit]').disabled = true;
+  await docmd('sendmsg', t);
+  document.querySelector('input[type=submit]').disabled = false;
+  getmessages();
+}
+
+function set_petname(id) {
+  event.preventDefault();
+  let r = prompt('Petname', petnames[id]);
+  if (r == null || r == '') {
+    return;
+  }
+  petnames[id] = r;
+  let pn = get_petname(id);
+  for (e of document.querySelectorAll(`.id[title="${id}"]`)) {
+    e.firstChild.innerText = pn;
+  }
+  save_petnames();
+}
+
+function save_petnames() {
+  localStorage.petnames = JSON.stringify(petnames);
+}
+
+var in_buf = [];
+async function read_byte() {
+  if (in_buf.length == 0) {
+    let r = await device.transferIn(2, 64);
+    in_buf = Array.from(new Uint8Array(r.data.buffer));
+  }
+  let b = in_buf.shift();
+  return b;
+}
+
+async function docmd(name, data) {
+  if (device == null) {
+    console.error('device is null');
+    return;
+  } else if (cmd_in_progress) {  // Some other command is happening, wait a sec and retry
+    console.log(`${name} waiting`);
+    return await later(50, () => {
+      return docmd(name, data);
+    });
+  }
+  cmd_in_progress = true;
+
+  let te = new TextEncoder('utf8');
+  await device.transferOut(1, te.encode("\x01" + name + "\x02" + data + "\x04"));
+
+  let rname = [], rdata = [];
+  let b = await read_byte();
+  if (b != 1) {
+    await disconnect();
+    cmd_in_progress = false;
+    throw 'Invalid message read';
+  }
+  b = await read_byte();
+  while (b != 2) {
+    rname.push(b);
+    b = await read_byte();
+  }
+  b = await read_byte();
+  while (b != 4) {
+    rdata.push(b);
+    b = await read_byte();
+  }
+
+  cmd_in_progress = false;
+
+  let td = new TextDecoder('utf8');
+  return { name: td.decode(new Uint8Array(rname)), data: td.decode(new Uint8Array(rdata)) };
+}
+
+window.addEventListener('load', async () => {
+  if (typeof localStorage['petnames'] != 'undefined') {
+    try {
+      petnames = JSON.parse(localStorage.petnames);
+    } catch (e) {
+      console.error('petnames storage corrupted; resetting');
+      localStorage.petnames = '{}';
+    }
+  }
+
+  navigator.usb.addEventListener('disconnect', async (event) => {
+    if (event.device == device) {
+      console.error('USB disconnected');
+      await disconnect();
+    }
+  });
+
+  navigator.usb.addEventListener('connect', async (event) => {
+    console.log('USB connected');
+    if (device == null) {
+      device = event.device;
+      await setup_device();
+      start_polling();
+    }
+  });
+
+  let devices = await navigator.usb.getDevices();
+  console.log(devices);
+  if (devices.length > 0) {
+    device = devices[0];
+    await setup_device();
+    start_polling();
+  }
+});
+
+const registration = navigator.serviceWorker.register('worker.js', {
+  scope: '/chat/',
+});
+console.log('registration', registration);
+</script>

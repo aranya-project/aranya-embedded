@@ -6,6 +6,7 @@
 
 extern crate alloc;
 
+mod application;
 pub mod aranya;
 mod built;
 mod hardware;
@@ -14,39 +15,40 @@ mod storage;
 mod util;
 mod watchdog;
 
-use aranya::daemon::{Daemon, Imp};
-use aranya_runtime::vm_action;
+use aranya::daemon::Daemon;
+use aranya_crypto::{DeviceId, Rng};
 use embassy_executor::Spawner;
 #[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
-use embassy_time::{Duration, TimeoutError, Timer};
+use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{AnyPin, GpioPin, Input, Level, Output, Pull};
+use esp_hal::gpio::{AnyPin, Input, Pull};
+#[cfg(any(feature = "net-irda", feature = "storage-sd"))]
+use esp_hal::gpio::{Level, Output};
 use esp_hal::interrupt::software::SoftwareInterruptControl;
 use esp_hal::interrupt::Priority;
-use esp_hal::peripherals::{TIMG0, TIMG1};
+use esp_hal::peripherals::TIMG1;
 use esp_hal::timer::timg::TimerGroup;
 use esp_hal_embassy::{main, InterruptExecutor};
-use esp_rmt_neopixel::Neopixel;
+use esp_rmt_neopixel::{Neopixel, RgbU8};
 use esp_storage::FlashStorage;
-use hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL};
+use hardware::neopixel::NEOPIXEL_SIGNAL;
 use log::info;
 
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
 
 #[cfg(feature = "net-esp-now")]
-use esp_wifi::{
-    esp_now::{EspNowManager, EspNowReceiver, EspNowSender, PeerInfo, BROADCAST_ADDRESS},
-    init, EspWifiController,
-};
+use esp_wifi::{esp_now::EspNowManager, init, EspWifiController};
 
-use net::NetworkEngine;
-use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters, RgbU8};
+use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters};
 use static_cell::StaticCell;
 
+use crate::application::BUTTON_CHANNEL;
+use crate::hardware::neopixel::NeopixelState;
 use crate::watchdog::Watchdog;
+use net::NetworkEngine;
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
@@ -75,6 +77,7 @@ async fn main(spawner: Spawner) {
 
     //tracing::subscriber::set_global_default(util::SimpleSubscriber::new()).expect("log subscriber");
 
+    #[cfg(any(feature = "net-irda", feature = "storage-sd"))]
     let mut acc_power = board_def
         .accessory_power
         .map(|pin| Output::new(pin, Level::Low));
@@ -151,31 +154,25 @@ async fn main(spawner: Spawner) {
         Some(a) => a.into(),
     };
 
+    let device_id = match parameter_values.device_id {
+        None => {
+            let device_id = DeviceId::random(&mut Rng::default());
+            parameters
+                .update(|p| p.device_id = Some(device_id.into()))
+                .expect("could not update device ID");
+            device_id
+        }
+        Some(id) => id.into(),
+    };
+    log::info!("Device ID is {device_id}");
+
     let mut network_engines: heapless::Vec<&'static dyn NetworkEngine, MAX_NETWORK_ENGINES> =
         heapless::Vec::new();
 
-    #[cfg(feature = "net-wifi")]
-    {
-        let rng = esp_hal::rng::Rng::new(peripherals.RNG);
-        let engine = net::wifi::start(
-            peripherals.WIFI,
-            peripherals.RADIO_CLK,
-            timer_g1.timer1,
-            rng,
-            spawner,
-        )
-        .await;
-        spawner
-            .spawn(aranya::syncer::sync_wifi(
-                daemon.get_client(),
-                engine.interface(),
-            ))
-            .expect("could not spawn WiFi syncer task");
-        network_engines.push(engine);
-    }
-
     #[cfg(feature = "net-esp-now")]
     {
+        use esp_hal::gpio::{Level, Output};
+
         let rng = esp_hal::rng::Rng::new(peripherals.RNG);
         let init = &*mk_static!(
             EspWifiController<'static>,
@@ -187,24 +184,22 @@ async fn main(spawner: Spawner) {
         log::info!("esp-now version {}", esp_now.version().unwrap());
 
         let (manager, sender, receiver) = esp_now.split();
-        let manager: &'static mut EspNowManager<'static> =
+        let _manager: &'static mut EspNowManager<'static> =
             mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
-
         let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
+        let tx_led = Output::new(peripherals.GPIO10, Level::Low);
+        let rx_led = Output::new(peripherals.GPIO11, Level::Low);
 
-        let engine = net::espnow::start(sender, receiver, parameter_values.address).await;
+        let engine =
+            net::espnow::start(sender, receiver, parameter_values.address, tx_led, rx_led).await;
 
-        spawner.must_spawn(aranya::syncer::sync_esp_now(
-            daemon.get_imp(graph_id, NeopixelSink::new()),
-            engine.interface(),
-            parameter_values.peers.clone(),
-        ));
+        daemon.add_esp_now_interface(engine.interface(), graph_id);
 
         if network_engines.push(engine).is_err() {
             log::info!("could not start ESP Now network engine");
         }
-    }
+    };
 
     #[cfg(feature = "net-irda")]
     if let Some(ir) = board_def.ir {
@@ -213,11 +208,9 @@ async fn main(spawner: Spawner) {
         }
         let irts = IrdaTransceiver::new(peripherals.UART1, ir.tx, ir.rx, ir.en);
         let engine = net::irda::start(irts, parameter_values.address).await;
-        spawner.must_spawn(aranya::syncer::sync_irda(
-            daemon.get_imp(graph_id, NeopixelSink::new()),
-            engine.interface(),
-            parameter_values.peers.clone(),
-        ));
+
+        daemon.add_irda_interface(engine.interface(), graph_id);
+
         if network_engines.push(engine).is_err() {
             log::info!("could not start IR network engine");
         }
@@ -252,17 +245,22 @@ async fn main(spawner: Spawner) {
         spawner.must_spawn(net_task(network_engines, wdt1));
     }
 
-    spawner.must_spawn(button_task(
-        board_def.button,
-        daemon.get_imp(graph_id, NeopixelSink::new()),
-        parameter_values.color,
-        parameters,
+    spawner.must_spawn(watchdog::idle_task0(wdt0));
+
+    spawner.must_spawn(aranya::daemon::daemon_task(daemon, graph_id));
+
+    spawner.must_spawn(application::app_task(device_id));
+
+    spawner.must_spawn(application::serial::usb_serial_task(
+        peripherals.USB0,
+        peripherals.GPIO20,
+        peripherals.GPIO19,
     ));
 
-    spawner.must_spawn(led_task(neopixel, parameter_values.color));
+    spawner.must_spawn(button_task(board_def.button, parameters));
+    spawner.must_spawn(led_task(neopixel));
 
     spawner.must_spawn(heap_report());
-    spawner.must_spawn(watchdog::idle_task0(wdt0));
 }
 
 #[embassy_executor::task]
@@ -282,29 +280,16 @@ async fn net_task(
 #[embassy_executor::task]
 async fn button_task(
     pin: AnyPin,
-    imp: Imp<NeopixelSink>,
-    color: RgbU8,
     mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
 ) {
     let mut driver = Input::new(pin, Pull::Up);
     loop {
         driver.wait_for_falling_edge().await;
-        match embassy_time::with_timeout(Duration::from_secs(5), driver.wait_for_high()).await {
+        match embassy_time::with_timeout(Duration::from_secs(10), driver.wait_for_high()).await {
             Ok(_) => {
-                log::info!("led pressed");
-                match imp
-                    .call_action(vm_action!(set_led(
-                        color.red as i64,
-                        color.green as i64,
-                        color.blue as i64
-                    )))
-                    .await
-                {
-                    Ok(_) => (),
-                    Err(e) => log::error!("could not set LED: {e}"),
-                };
+                BUTTON_CHANNEL.send(()).await;
             }
-            Err(TimeoutError) => {
+            Err(_te) => {
                 // Button has been held for five seconds; DESTROY THE WORLD
                 parameters.update(|p| p.graph_id = None).ok();
                 #[cfg(feature = "storage-internal")]
@@ -322,30 +307,84 @@ async fn button_task(
     }
 }
 
+const MENTION_CURVE: [u8; 8] = [5, 15, 25, 34, 50, 40, 25, 10];
+const MESSAGES_CURVE: [u8; 4] = [10, 20, 10, 0];
+
 #[embassy_executor::task]
-async fn led_task(mut neopixel: Neopixel<'static>, initial_color: parameter_store::RgbU8) {
-    let mut intensity = 1.0;
-    // gross - TODO(chip): find some cleaner neutral format between parameter store and neopixel.
-    let mut color = <(u8, u8, u8) as From<parameter_store::RgbU8>>::from(initial_color).into();
+async fn led_task(mut neopixel: Neopixel<'static>) {
+    let mut state = NeopixelState::default();
+    let mut phase = 0usize;
+    let mut counter = 0;
+    let mut output_color = RgbU8::default();
+    let mut new_color = RgbU8::default();
+
     neopixel.set_power(true);
+    neopixel.set_color(40, 10, 0).ok();
+    Timer::after_millis(500).await;
+    neopixel.set_color(0, 0, 0).ok();
+
     loop {
         match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
-            Ok(c) => {
-                color = c;
-                intensity = 1.0;
+            Ok(ns) => {
+                state = ns;
+                phase = 0;
+                counter = 10;
             }
-            Err(TimeoutError) => intensity -= (intensity - 0.3) / 5.0,
+            Err(_) => {
+                if counter > 0 {
+                    counter -= 1;
+                }
+                log::debug!("neopixel: {state:?} phase:{phase} c:{counter} output_color:{new_color:?}");
+                match phase {
+                    // Idle
+                    0 => {
+                        new_color = RgbU8::default();
+                    }
+                    1 => {
+                        if state.mentioned {
+                            new_color = RgbU8 {
+                                red: MENTION_CURVE[counter],
+                                green: 0,
+                                blue: MENTION_CURVE[counter],
+                            };
+                        }
+                    }
+                    2 => {
+                        if state.unseen_count > 0 {
+                            let cc = counter & 0x03;
+                            new_color = RgbU8 {
+                                red: 0,
+                                green: MESSAGES_CURVE[cc],
+                                blue: 0,
+                            };
+                        }
+                    }
+                    _ => unreachable!(),
+                }
+                if counter == 0 {
+                    phase = (phase + 1) % 3;
+                    counter = match phase {
+                        0 => 10,
+                        1 => 8,
+                        2 => {
+                            if state.unseen_count > 5 {
+                                20
+                            } else {
+                                state.unseen_count * 4
+                            }
+                        }
+                        _ => unreachable!(),
+                    }
+                }
+            }
         };
-        let effective_color = color * intensity;
-        log::trace!("effective color: {effective_color:?} (intensity {intensity:04})");
-        neopixel
-            .set_color(
-                effective_color.red,
-                effective_color.green,
-                effective_color.blue,
-            )
-            .inspect_err(|e| log::error!("neopixel: {e}"))
-            .ok();
+        if new_color != output_color {
+            output_color = new_color;
+            neopixel
+                .set_color(output_color.red, output_color.green, output_color.blue)
+                .inspect_err(|e| log::error!("neopixel: {e}"))
+                .ok();
+        }
     }
 }
 

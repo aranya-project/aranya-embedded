@@ -1,6 +1,6 @@
 use core::ops::Mul;
 
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
 pub struct RgbU8 {
     pub red: u8,
     pub green: u8,
