@@ -22,7 +22,7 @@ use crate::{
 };
 
 const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
-const BASE_SYNC_DELAY_US: u64 = 16000;
+const BASE_SYNC_DELAY_US: u64 = 4000;
 const SYNC_RESPONSE_BOOST: u8 = 4;
 const SYNC_FINISH_BOOST: u8 = 4;
 
