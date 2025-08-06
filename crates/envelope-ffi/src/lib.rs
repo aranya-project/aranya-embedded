@@ -1,11 +1,12 @@
+#![no_std]
+
 extern crate alloc;
 
 use alloc::vec::Vec;
 use core::convert::Infallible;
 
-use aranya_crypto::DeviceId;
+use aranya_crypto::{Id, DeviceId};
 use aranya_policy_vm::{ffi::ffi, CommandContext, MachineError};
-use aranya_runtime::CommandId;
 
 /// An Envelope that does no crypto
 pub struct NullEnvelope {
@@ -38,29 +39,21 @@ impl NullEnvelope {
         _eng: &mut E,
         payload: Vec<u8>,
     ) -> Result<Envelope, MachineError> {
-        #[derive(serde::Serialize)]
-        struct HashedFields<'a> {
-            parent_id: CommandId,
-            author_id: DeviceId,
-            payload: &'a [u8],
-        }
-
         let CommandContext::Seal(ctx) = ctx else {
             panic!("envelope::do_seal called outside seal context");
         };
 
-        let parent_id = ctx.head_id.into();
+        let parent_id = ctx.head_id;
         let author_id = self.user;
 
-        let data = postcard::to_allocvec(&HashedFields {
-            parent_id,
-            author_id,
-            payload: &payload,
-        })
-        .expect("can serialize `HashedFields`");
-
-        use aranya_crypto::dangerous::spideroak_crypto::{hash::Hash, rust::Sha256};
-        let command_id: CommandId = Sha256::hash(&data).into_array().into();
+        let command_id: Id = {
+            use aranya_crypto::dangerous::spideroak_crypto::{hash::Hash, rust::Sha256};
+            let mut hasher = Sha256::new();
+            hasher.update(parent_id.as_bytes());
+            hasher.update(author_id.as_bytes());
+            hasher.update(&payload);
+            hasher.digest().into_array().into()
+        };
 
         Ok(Envelope {
             parent_id: parent_id.into(),

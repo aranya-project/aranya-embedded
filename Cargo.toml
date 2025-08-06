@@ -3,24 +3,54 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.dependencies]
-aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-lang" }
-aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-compiler" }
-aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-ifgen-build" }
-aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-runtime" }
-aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-ifgen" }
-aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-policy-vm" }
-aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-crypto" }
-aranya-envelope-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-envelope-ffi" }
-aranya-crypto-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-crypto-ffi" }
-aranya-device-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-device-ffi" }
-aranya-idam-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-idam-ffi" }
-aranya-perspective-ffi = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming", package = "aranya-perspective-ffi" }
+aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "embedded-upstreaming" }
+spideroak-base58 = "0.2"
+
+adafruit-seesaw = "0.11"
+anyhow = "1.0"
+bytes = { version = "1.10.1", default-features = false }
+clap = { version = "4.5", features = ["derive"] }
+crc = "3.2"
+embassy-executor = "0.7.0"
+embassy-futures = "0.1"
+embassy-net = "0.6.0"
+embassy-sync = "0.6"
+embassy-time = "0.4.0"
+embassy-usb = "0.4"
+embedded-hal-bus = "0.3.0"
+embedded-io-async = "0.6.1"
+embedded-sdmmc = "0.9"
+embedded-storage = "0.3"
+esp-alloc = "0.6.0"
+esp-backtrace = { version = "0.15.0", features = ["esp32s3"] }
 esp-hal = { version = "0.23.1", features = [
     "esp32s3",
     "unstable",
     "quad-psram"
 ] }
+esp-hal-embassy = { version = "0.6.0", features = ["esp32s3"] }
+esp-partition-table = "0.1"
+esp-println = { version = "0.13.0", features = ["esp32s3"] }
+esp-storage = { version = "0.5", features = ["esp32s3"] }
+esp-wifi = { version = "0.12.0", features = ["esp32s3"] }
+esp32s3 = "0.30"
 fugit = "0.3.7"
-heapless = { version = "0.8.0", default-features = false }
+getrandom = "0.2.15"
+heapless = "0.8.0"
+log = "0.4.21"
+nb = "1.1"
+owo-colors = "4.1.0"
+postcard = { version = "1.0.10", default-features = false }
+raptorq = { version = "2", default-features = false }
+rkyv = { version = "0.8.10", default-features = false }
+ron = "0.8.1"
+serde = { version = "1", default-features = false }
 static_cell = { version = "2.1.0", features = ["nightly"] }
 thiserror = { version = "2", default-features = false }
+tracing = { version = "0.1", default-features = false }

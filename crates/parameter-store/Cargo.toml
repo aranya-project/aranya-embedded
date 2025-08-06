@@ -5,15 +5,14 @@ edition = "2021"
 publish = false
 
 [dependencies]
-crc = "3.2"
-heapless = { version = "0.8.0", default-features = false }
-postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
-serde = { version = "1", default-features = false, features = ["alloc"] }
-thiserror = { version = "2", default-features = false }
+crc = { workspace = true }
+heapless = { workspace = true, features = ["serde"] }
+postcard = { workspace = true, features = ["alloc"] }
+serde = { workspace = true, features = ["alloc"] }
+thiserror = { workspace = true }
 
-embedded-io = { version ="0.6", optional = true }
-embedded-storage = { version = "0.3", optional = true }
+embedded-storage = { workspace = true, optional = true }
 
 [features]
 std = []
-embedded = ["dep:embedded-io", "dep:embedded-storage"]
+embedded = ["dep:embedded-storage"]

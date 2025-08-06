@@ -5,9 +5,10 @@ edition = "2021"
 publish = false
 
 [dependencies]
-aranya-crypto = { workspace = true }
-anyhow = "1"
-clap = { version = "4", features = ["derive"] }
-heapless = "0.8"
 # TODO(chip): switch this to the public repo path
 parameter-store = { path = "../parameter-store", features = ["std"] }
+
+aranya-crypto = { workspace = true }
+
+anyhow = { workspace = true }
+clap = { workspace = true }

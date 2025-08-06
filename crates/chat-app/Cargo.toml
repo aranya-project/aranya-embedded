@@ -3,97 +3,69 @@ name = "chat-app"
 version = "0.1.0"
 edition = "2021"
 
+
 [dependencies]
+board-defs = { path = "../board-defs" }
+envelope-ffi = { path = "../envelope-ffi" }
+esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
+parameter-store = { path = "../parameter-store", features = ["embedded"] }
+
 aranya-runtime = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
 aranya-crypto = { workspace = true, features = ["memstore"] }
-aranya-envelope-ffi = { workspace = true }
-aranya-crypto-ffi = { workspace = true }
-aranya-device-ffi = { workspace = true }
-aranya-idam-ffi = { workspace = true }
-aranya-perspective-ffi = { workspace = true }
-aranya-buggy = "0.1.0"
-board-defs = { path = "../board-defs" }
-bytes = { version = "1.10.1", default-features = false }
-cfg-if = "1.0.0"
-critical-section = "1.2.0"
-embassy-executor = { version = "0.7.0",  features = ["nightly"] }
-embassy-futures = "0.1"
-embassy-sync = "0.6"
-embassy-time = { version = "0.4.0",  features = ["generic-queue-8"] }
-embassy-usb = "0.4"
-embedded-hal = "1.0.0"
-embedded-io = "0.6.1"
-embedded-io-async = "0.6.1"
-enumset = "1.1.5"
-esp-alloc = { version = "0.6.0" }
-esp-backtrace = { version = "0.15.0", features = [
-    "esp32s3",
-    "exception-handler",
-    "panic-handler",
-    "println",
-    "custom-halt",
-]}
+spideroak-base58 = { workspace = true }
+
+bytes = { workspace = true }
+embassy-executor = { workspace = true, features = ["nightly"] }
+embassy-futures = { workspace = true }
+embassy-sync = { workspace = true }
+embassy-time = { workspace = true, features = ["generic-queue-8"] }
+embassy-usb = { workspace = true }
+esp-alloc = { workspace = true }
+esp-backtrace = { workspace = true, features = ["exception-handler", "panic-handler", "println", "custom-halt"] }
 esp-hal = { workspace = true }
-esp-hal-embassy  = { version = "0.6.0",  features = ["esp32s3"] }
-esp-println = { version = "0.13.0", features = ["esp32s3", "log"] }
-esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
+esp-hal-embassy  = { workspace = true }
+esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
-getrandom = { version = "0.2.15", features = ["custom"]}
+getrandom = { workspace = true, features = ["custom"] }
 heapless = { workspace = true }
-log = { version = "0.4.21" }
+log = { workspace = true }
 num-traits = { version = "0.2", default-features = false }
-owo-colors = "4.1.0"
-parameter-store = { path = "../parameter-store", features = ["embedded"] }
-postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
-rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
-serde = { version = "1.0.205", default-features = false, features = ["alloc"] }
+owo-colors = { workspace = true }
+postcard = { workspace = true, features = ["alloc"] }
+rkyv = { workspace = true, features = ["alloc", "bytecheck"] }
+serde = { workspace = true, features = ["alloc"] }
 static_cell = { workspace = true }
 thiserror = { workspace = true }
-tracing = { version = "0.1", default-features = false }
-spideroak-base58 = "0.2"
-
+tracing = { workspace = true }
 
 # Enabled by "storage-internal" feature
-embedded-storage = { version = "0.3", optional = true }
-esp-partition-table = { version = "0.1", features = ["heapless"], optional = true }
-esp-storage = { version = "0.5", features = ["esp32s3"], optional = true }
+embedded-storage = { workspace = true, optional = true }
+esp-partition-table = { workspace = true, features = ["heapless"], optional = true }
+esp-storage = { workspace = true, optional = true }
 
 # Enabled by "storage-sd" feature
-embedded-hal-bus = { version = "0.3.0", optional = true }
-# Used git as VolumeManager::read still receives `&mut self` in 0.8.1
-embedded-sdmmc = { git = "https://github.com/rust-embedded-community/embedded-sdmmc-rs", optional = true }
+embedded-hal-bus = { workspace = true, optional = true }
+embedded-sdmmc = { workspace = true, optional = true }
 
 # Enabled by "net-irda" feature
-crc = { version = "3.2", optional = true }
+crc = { workspace = true, optional = true }
 esp-irda-transceiver = { path = "../esp-irda-transceiver", optional = true }
-raptorq = { version = "2", default-features = false, optional = true }
+raptorq = { workspace = true, optional = true }
 
 # Dependencies enabled for "net-esp-now"
-esp-wifi = { version = "0.12.0", default-features=false, features = [
-    "esp32s3",
-    "esp-alloc",
-    "log",
-    "esp-now"
-], optional = true }
+esp-wifi = { workspace = true, features = ["log", "esp-now"], optional = true }
+
 
 [build-dependencies]
-ron = "0.8.1"
-serde = {version = "1.0.215", features = ["derive"] }
+envelope-ffi = { path = "../envelope-ffi" }
 aranya-policy-lang = { workspace = true }
 aranya-policy-compiler = { workspace = true }
 aranya-policy-vm = { workspace = true }
-aranya-runtime = { workspace = true }
-aranya-envelope-ffi = { workspace = true }
-aranya-crypto-ffi = { workspace = true }
-aranya-device-ffi = { workspace = true }
-aranya-crypto = { workspace = true }
-aranya-idam-ffi = { workspace = true }
-aranya-perspective-ffi = { workspace = true }
 aranya-policy-ifgen-build = { workspace = true }
-postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }
-rkyv = { version = "0.8.10", default-features = false, features = ["alloc", "bytecheck"] }
+rkyv = { workspace = true, features = ["alloc", "bytecheck"] }
+
 
 [features]
 default = ["storage-internal", "net-esp-now", "spideroak-demo-v2"]
