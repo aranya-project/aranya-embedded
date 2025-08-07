@@ -21,9 +21,9 @@ use crate::{
     application::serial::{SerialCommand, SerialResponse},
     aranya::{
         daemon::{ACTION_IN_CHANNEL, EFFECT_OUT_CHANNEL},
-        policy::MessageReceived,
+        policy,
     },
-    hardware::neopixel::{NeopixelState, NEOPIXEL_SIGNAL},
+    hardware::neopixel::{MessageState, NeopixelMessage, NEOPIXEL_SIGNAL},
     vm_action_owned,
 };
 
@@ -60,7 +60,8 @@ impl TryFrom<VmEffect> for ChatMessage {
     type Error = NotMessageReceived;
 
     fn try_from(value: VmEffect) -> Result<Self, Self::Error> {
-        let mr: MessageReceived = value.fields.try_into().map_err(|_| NotMessageReceived())?;
+        let mr: policy::MessageReceived =
+            value.fields.try_into().map_err(|_| NotMessageReceived())?;
         Ok(ChatMessage {
             ts: Instant::now(),
             id: value.command,
@@ -127,6 +128,18 @@ impl Application {
                                 self.chat_buffer.enqueue(Box::new(chatmsg)).ok();
                             }
                         }
+                        "RainbowEffect" => {
+                            NEOPIXEL_SIGNAL.signal(NeopixelMessage::Rainbow);
+                        }
+                        "AmbientColorChanged" => {
+                            let effect: policy::AmbientColorChanged = effect
+                                .fields
+                                .try_into()
+                                .expect("Got some effect other than AmbientColorChanged");
+                            NEOPIXEL_SIGNAL.signal(NeopixelMessage::Ambient {
+                                color: effect.color,
+                            });
+                        }
                         _ => (),
                     };
                 }
@@ -156,6 +169,14 @@ impl Application {
                                 .send(SerialResponse::MessageData(msgs))
                                 .await;
                         }
+                        SerialCommand::Rainbow => {
+                            ACTION_IN_CHANNEL
+                                .send(vm_action_owned!(send_rainbow(self.device_id)))
+                                .await;
+                        }
+                        SerialCommand::SetAmbientColor(color) => {
+                            // TODO: send the action
+                        }
                     }
                 }
                 Either3::Third(_) => {
@@ -169,10 +190,10 @@ impl Application {
     }
 
     fn update_neopixel(&self) {
-        NEOPIXEL_SIGNAL.signal(NeopixelState {
+        NEOPIXEL_SIGNAL.signal(NeopixelMessage::MessageState(MessageState {
             unseen_count: self.unseen_count,
             mentioned: self.mentioned,
-        });
+        }));
     }
 }
 

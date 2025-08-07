@@ -5,6 +5,19 @@ policy-version: 2
 ```policy
 use envelope
 
+enum AmbientColor {
+    Black,
+    Blue,
+    Red,
+    Green,
+    Magenta,
+    Cyan,
+    Yellow,
+    White,
+}
+
+fact CurrentColor[]=>{color enum AmbientColor}
+
 action create_team(nonce bytes) {
     publish Init {
         nonce: nonce,
@@ -23,6 +36,7 @@ command Init {
 
     policy {
         finish {
+            create CurrentColor[]=>{color: AmbientColor::Black}
             emit TeamCreated {}
         }
     }
@@ -54,6 +68,70 @@ command ChatMessage {
             emit MessageReceived {
                 author: this.author,
                 msg: this.msg,
+            }
+        }
+    }
+}
+```
+
+## Rainbow
+
+```policy
+action send_rainbow(author id) {
+    // TODO: publish command
+}
+
+effect RainbowEffect {
+    author id
+}
+
+command Rainbow {
+    fields {
+        author id
+    }
+
+    seal { return envelope::do_seal(serialize(this)) }
+    open { return deserialize(envelope::do_open(envelope)) }
+
+    policy {
+        finish {
+            emit RainbowEffect {
+                author: this.author
+            }
+        }
+    }
+}
+```
+
+# Ambient LED Color
+
+```policy
+action set_ambient_color(author id, color enum AmbientColor) {
+    publish SetAmbientColor {
+        author: author,
+        color: color,
+    }
+}
+
+effect AmbientColorChanged {
+    author id,
+    color enum AmbientColor,
+}
+
+command SetAmbientColor {
+    fields {
+        author id,
+        color enum AmbientColor,
+    }
+
+    seal { return envelope::do_seal(serialize(this)) }
+    open { return deserialize(envelope::do_open(envelope)) }
+
+    policy {
+        finish {
+            emit AmbientColorChanged {
+                author: this.author,
+                color: this.color,
             }
         }
     }
