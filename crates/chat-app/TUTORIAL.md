@@ -76,18 +76,16 @@ You should now be ready to continue.
 
 ## Get the app
 
-Change to the directory you would like to work in and clone the Aranya Embedded git repository and enter the root of the
-repository.
+Change to the directory you would like to work in and clone the Aranya Embedded git repository. 
 
 ```
 git clone https://github.com/aranya-project/aranya-embedded.git
-cd aranya-embedded
 ```
 
-Change directory into the `chat-app` crate.
+Change directory into the `chat-app` crate in the new aranya-embedded directory.
 
 ```
-cd crates/chat-app
+cd aranya-embedded/crates/chat-app
 ```
 
 And build it.
