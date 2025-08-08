@@ -589,6 +589,7 @@ dependencies = [
  "getrandom 0.2.16",
  "heapless 0.8.0",
  "log",
+ "num-traits",
  "owo-colors",
  "parameter-store",
  "postcard",

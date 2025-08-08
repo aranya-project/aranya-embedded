@@ -43,6 +43,7 @@ fugit = { workspace = true }
 getrandom = { version = "0.2.15", features = ["custom"]}
 heapless = { workspace = true }
 log = { version = "0.4.21" }
+num-traits = { version = "0.2", default-features = false }
 owo-colors = "4.1.0"
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 postcard = { version = "1.0.10", default-features = false, features = ["alloc"] }

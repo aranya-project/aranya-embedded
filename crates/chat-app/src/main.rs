@@ -46,7 +46,8 @@ use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Pa
 use static_cell::StaticCell;
 
 use crate::application::BUTTON_CHANNEL;
-use crate::hardware::neopixel::NeopixelState;
+use crate::aranya::policy;
+use crate::hardware::neopixel::{rainbow_at, MessageState, NeopixelMessage};
 use crate::watchdog::Watchdog;
 use net::NetworkEngine;
 
@@ -313,7 +314,8 @@ const MESSAGES_CURVE: [u8; 4] = [10, 20, 10, 0];
 
 #[embassy_executor::task]
 async fn led_task(mut neopixel: Neopixel<'static>) {
-    let mut state = NeopixelState::default();
+    let mut state = MessageState::default();
+    let mut ambient_color = RgbU8::default();
     let mut phase = 0usize;
     let mut counter = 0;
     let mut output_color = RgbU8::default();
@@ -326,20 +328,80 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
 
     loop {
         match embassy_time::with_timeout(Duration::from_millis(100), NEOPIXEL_SIGNAL.wait()).await {
-            Ok(ns) => {
-                state = ns;
-                phase = 0;
-                counter = 10;
-            }
+            Ok(nm) => match nm {
+                NeopixelMessage::MessageState(ms) => {
+                    state = ms;
+                    phase = 0;
+                    counter = 10;
+                }
+                NeopixelMessage::Rainbow => {
+                    for i in 0..3 {
+                        for hue in (0..360).step_by(6) {
+                            let (red, green, blue) = rainbow_at(hue);
+                            neopixel.set_color(red, green, blue).ok();
+                            Timer::after_millis(30).await;
+                        }
+                    }
+                    neopixel
+                        .set_color(ambient_color.red, ambient_color.green, ambient_color.blue)
+                        .ok();
+                }
+                NeopixelMessage::Ambient { color } => {
+                    ambient_color = match color {
+                        policy::AmbientColor::Black => RgbU8 {
+                            red: 0,
+                            green: 0,
+                            blue: 0,
+                        },
+                        policy::AmbientColor::Blue => RgbU8 {
+                            red: 0,
+                            green: 0,
+                            blue: 10,
+                        },
+                        policy::AmbientColor::Red => RgbU8 {
+                            red: 10,
+                            green: 0,
+                            blue: 0,
+                        },
+                        policy::AmbientColor::Green => RgbU8 {
+                            red: 0,
+                            green: 10,
+                            blue: 0,
+                        },
+                        policy::AmbientColor::Magenta => RgbU8 {
+                            red: 5,
+                            green: 0,
+                            blue: 5,
+                        },
+                        policy::AmbientColor::Cyan => RgbU8 {
+                            red: 0,
+                            green: 5,
+                            blue: 5,
+                        },
+                        policy::AmbientColor::Yellow => RgbU8 {
+                            red: 5,
+                            green: 5,
+                            blue: 0,
+                        },
+                        policy::AmbientColor::White => RgbU8 {
+                            red: 3,
+                            green: 3,
+                            blue: 3,
+                        },
+                    };
+                }
+            },
             Err(_) => {
                 if counter > 0 {
                     counter -= 1;
                 }
-                log::debug!("neopixel: {state:?} phase:{phase} c:{counter} output_color:{new_color:?}");
+                log::debug!(
+                    "neopixel: {state:?} phase:{phase} c:{counter} output_color:{new_color:?}"
+                );
                 match phase {
                     // Idle
                     0 => {
-                        new_color = RgbU8::default();
+                        new_color = ambient_color;
                     }
                     1 => {
                         if state.mentioned {

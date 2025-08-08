@@ -23,8 +23,8 @@ use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
 use esp_println::println;
 use spideroak_base58::ToBase58;
 
-use crate::application::ChatMessage;
 use crate::application::{SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL};
+use crate::{application::ChatMessage, aranya::policy};
 
 const MAX_SERIAL_PACKET_SIZE: u16 = 64;
 const WEB_SOURCE: &'static str = include_str!("../../web/client.html");
@@ -34,6 +34,8 @@ const DEVICE_INTERFACE_GUIDS: &[&str] = &["{63788892-2A36-4357-AFD0-008A6570D80A
 pub enum SerialCommand {
     SendMessage(String),
     GetMessages(Instant),
+    Rainbow,
+    SetAmbientColor(policy::AmbientColor),
 }
 
 #[derive(Debug)]
@@ -45,7 +47,12 @@ pub enum SerialResponse {
 }
 
 #[embassy_executor::task]
-pub async fn usb_serial_task(usb0: USB0, usb_dp: GpioPin<20>, usb_dm: GpioPin<19>, device_id: DeviceId) {
+pub async fn usb_serial_task(
+    usb0: USB0,
+    usb_dp: GpioPin<20>,
+    usb_dm: GpioPin<19>,
+    device_id: DeviceId,
+) {
     let usb = otg_fs::Usb::new(usb0, usb_dp, usb_dm);
     let mut ep_out_buffer = [0u8; 1024];
     let config = otg_fs::asynch::Config::default();
@@ -258,6 +265,24 @@ impl<'d, 'a> SerialCommandEngine<'d, 'a> {
             "getmsgs" => SerialCommand::GetMessages(Instant::from_ticks(
                 u64::from_str_radix(data, 10).expect("bad instant"),
             )),
+            "rainbow" => SerialCommand::Rainbow,
+            "ambient" => {
+                let color = match data {
+                    "black" => policy::AmbientColor::Black,
+                    "blue" => policy::AmbientColor::Blue,
+                    "red" => policy::AmbientColor::Red,
+                    "green" => policy::AmbientColor::Green,
+                    "magenta" => policy::AmbientColor::Magenta,
+                    "cyan" => policy::AmbientColor::Cyan,
+                    "yellow" => policy::AmbientColor::Yellow,
+                    "white" => policy::AmbientColor::White,
+                    other_color => {
+                        log::error!("invalid color: {other_color}");
+                        return;
+                    }
+                };
+                SerialCommand::SetAmbientColor(color)
+            }
             _ => {
                 println!("Unknown serial command `{command}`");
                 return;
