@@ -319,6 +319,7 @@ window.addEventListener('load', async () => {
       console.error('USB disconnected');
       await disconnect();
     }
+    cmd_in_progress = false;
   });
 
   navigator.usb.addEventListener('connect', async (event) => {

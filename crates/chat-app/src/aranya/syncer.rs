@@ -9,7 +9,7 @@ use aranya_runtime::{
     SyncRequester, SyncResponder, SyncType, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use aranya_runtime::{ClientError, Command};
-use embassy_futures::poll_once;
+use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
 use parameter_store::MAX_PEERS;
 
@@ -304,7 +304,7 @@ where
                     &mut self.sink,
                     client,
                     self.graph_id,
-                )?;
+                ).await?;
             }
         } else {
             // We're done, destroy the requester
@@ -378,7 +378,7 @@ where
     }
 }
 
-fn add_commands(
+async fn add_commands(
     cmds: &[impl Command + core::fmt::Debug],
     trx: &mut Option<Transaction<SP, PE>>,
     peer_cache: &mut PeerCache,
@@ -388,7 +388,10 @@ fn add_commands(
 ) -> Result<()> {
     let trx = trx.get_or_insert_with(|| client.transaction(graph_id));
     dump_commands(cmds);
-    client.add_commands(trx, sink, cmds)?;
+    for cmd in cmds.chunks(1) {
+        client.add_commands(trx, sink, cmd)?;
+        yield_now().await;
+    }
 
     // Update peer cache
     let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
