@@ -6,7 +6,7 @@ V2](https://github.com/aranya-project/demo-board-v2).
 
 ## What is Aranya and why do I care?
 
-Aranya is an open source library for building secure systems based decentralized state. 
+Aranya is an open source library for building secure systems based on decentralized state. 
 
 Our primary application is to provide a Policy Decision Point at the edge for use in applications where depending on a centralized node is infeasible due to degraded or disrupted networks. 
 
@@ -18,7 +18,7 @@ The systems consists of three main technologies.
 
 The tutorial is build on the embedded version of our toolkit which is a technology demonstration. It runs on bare metal on 32bit MCUs such as the esp32. 
 
-The production version can be found at [https://github.com/aranya-project/aranya](https://github.com/aranya-project/aranya) and is targeted and linux environments.
+The production version can be found at [https://github.com/aranya-project/aranya](https://github.com/aranya-project/aranya) and is targeted at linux environments.
 
 By completing the tutorial and challenges you will gain an understanding on how to use the tool chain to build and flash Aranya to and esp32 as well as lean a few basics about how to build protocols using Aranya.
 
@@ -96,7 +96,7 @@ And build it.
 cargo build
 ```
 
-If that worked, let's continue with configuration and deployment. If it did not work check that you fallowed the previous steps and ask for help if your stuck.
+If that worked, let's continue with configuration and deployment. If it did not work check that you followed the previous steps and ask for help if you're stuck.
 
 ## Configuration
 
@@ -137,13 +137,13 @@ espflash write-bin 0x9000 params.bin
 
 ## Running
 
-Now it's time to deploy. Plug in your board to your computer using a usb-c cable.
+Now it's time to deploy. Plug in your board to your computer using a usb-c cable while holding down the large black button on the board. (You can release the button after the usb cable is plugged into the dev board and computer.)
 
 ```
 cargo run
 ```
 
-This should ask you which device you want to connect to. If you don't see a serial device check that it is plugged in. If you can select the device but it will not upload the program you may need to unplug the board and plug it back in while holding down the large button on the board. Once it is plugged in you can release the button a retry the `cargo run` command.
+This should ask you which device you want to connect to. If you don't see a serial device check that it is plugged in. If you can select the device but it will not upload the program you may need to unplug the board and plug it back in while holding down the large button on the board. Once it is plugged in you can release the button and retry the `cargo run` command.
 
 This should write the program to the device. You will have to reset the
 device to get it working. The easiest way to do this is to unplug it and
