@@ -1,6 +1,6 @@
 # Aranya Embedded
 
-**Hello DEF CON. If you are here for the Arana workshop start at [the tutorial](crates/chat-app/TUTORIAL.md).**
+**Hello DEF CON. If you are here for the Aranya workshop start at [the tutorial](crates/chat-app/TUTORIAL.md).**
 
 This repository holds the various crates that make up the Aranya Embedded
 project, which adapts the [main Aranya
