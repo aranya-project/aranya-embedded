@@ -173,9 +173,11 @@ impl Application {
                             ACTION_IN_CHANNEL
                                 .send(vm_action_owned!(send_rainbow(self.device_id)))
                                 .await;
+                            SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }
                         SerialCommand::SetAmbientColor(color) => {
                             // TODO: send the action
+                            SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }
                     }
                 }

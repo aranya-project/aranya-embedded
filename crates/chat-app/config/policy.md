@@ -123,7 +123,11 @@ command SetAmbientColor {
     open { return deserialize(envelope::do_open(envelope)) }
 
     policy {
+        let current_color_fact = unwrap query CurrentColor[]=>{color: ?}
+        let current_color = current_color_fact.color
+
         finish {
+            update CurrentColor[]=>{color: current_color} to {color: this.color}
             emit AmbientColorChanged {
                 author: this.author,
                 color: this.color,

@@ -158,3 +158,39 @@ open `web/client.html` to open the chat interface. Click "Connect". It
 should list the "Demo Board V2". Select it and click "Connect".
 
 You did it! You should now be able to send and receive messages.
+
+## Going further
+
+There are a couple of buttons on the UI that won't do anything yet - A
+"rainbow" button and a dropdown and button for setting the ambient LED
+color. These won't work as they are intentionally incomplete. It's up to
+you to finish the code to make them work.
+
+### Rainbow mode
+
+The first thing you need to do is [complete the `send_rainbow()`
+action](config/policy.md#rainbow). In Aranya, an action is the entry
+point to creating changes in the system. An action will typically
+publish a "command", which is a data definition and the rules for how to
+validate that data and update system state. The command published
+"effects", which the application receives and responds to as commands
+are replicated and processed. This effect is programmed to play a
+rainbow color animation on the RGB LED.
+
+### Ambient color
+
+The second thing is to get the ambient LED set working. It's missing
+both [its action](config/policy.md#ambient-led-color) as well as [the
+code that calls the action](src/application.rs#L178) in response to the
+USB serial event.
+
+This command maintains the current color through a "fact", which is a
+kind of key-value store that is updated by command policy. The policy
+for `SetAmbientColor` queries the current value, then updates it to the
+new value.
+
+### Reference material
+
+For a more detailed specification of the policy language, see our
+[policy language
+specification](https://github.com/aranya-project/aranya-docs/blob/main/docs/policy-v1.md).
