@@ -22,7 +22,7 @@ use crate::{
 };
 
 const SYNC_STALL_TIMEOUT: Duration = Duration::from_secs(8);
-const BASE_SYNC_DELAY_US: u64 = 16000;
+const BASE_SYNC_DELAY: Duration = Duration::from_secs(4);
 const SYNC_RESPONSE_BOOST: u8 = 4;
 const SYNC_FINISH_BOOST: u8 = 4;
 
@@ -192,7 +192,7 @@ where
     }
 
     fn hello_timeout(&mut self) -> Duration {
-        Duration::from_millis(BASE_SYNC_DELAY_US >> self.hello_boost)
+        Duration::from_millis(BASE_SYNC_DELAY.as_millis() >> self.hello_boost)
     }
 
     pub fn boost_hello(&mut self, factor: u8, immediate: bool) {
