@@ -97,10 +97,22 @@ button:disabled, input:disabled, textarea:disabled {
 
 <div class="container">
   <div>
-    <button id="connect_button" onclick="connect()">Connect</button>
-    <button id="disconnect_button" onclick="disconnect()" disabled>Disconnect</button>
+    <button class="when-disconnected" onclick="connect()">Connect</button>
+    <button class="when-connected" onclick="disconnect()" disabled>Disconnect</button>
     <!--<button onclick="docmd('sendmsg', 'SPAM SPAM SPAM')">SPAM</button>-->
     <!--<button onclick="fake_message()">Fake message</button>-->
+    <button class="when-connected" onclick="docmd('rainbow', '')" disabled>🌈RAINBOW🌈</button>
+    <select id="ambient_color_selection" class="when-connected" disabled>
+      <option value="black">Black</option>
+      <option value="blue">Blue</option>
+      <option value="red">Red</option>
+      <option value="green">Green</option>
+      <option value="magenta">Magenta</option>
+      <option value="cyan">Cyan</option>
+      <option value="yellow">Yellow</option>
+      <option value="white">White</option>
+    </select>
+    <button class="when-connected" onclick="set_ambient()" disabled>Set Ambient LED Color</button>
   </div>
   <div class="expand" id="output"></div>
   <div class="input_box">
@@ -133,8 +145,8 @@ async function disconnect() {
     await device.close();
   }
   device = null;
-  document.querySelector('#connect_button').disabled = false;
-  document.querySelector('#disconnect_button').disabled = true;
+  document.querySelectorAll('.when-disconnected').forEach(e => e.disabled = false);
+  document.querySelectorAll('.when-connected').forEach(e => e.disabled = true);
   document.querySelectorAll('#input_form > *').forEach(e => e.disabled = true);
   if (message_getter_handle != null) {
     clearInterval(message_getter_handle);
@@ -148,8 +160,8 @@ async function setup_device() {
 }
 
 function start_polling() {
-  document.querySelector('#connect_button').disabled = true;
-  document.querySelector('#disconnect_button').disabled = false;
+  document.querySelectorAll('.when-disconnected').forEach(e => e.disabled = true);
+  document.querySelectorAll('.when-connected').forEach(e => e.disabled = false);
   document.querySelectorAll('#input_form > *').forEach(e => e.disabled = false);
   getmessages();
   message_getter_handle = setInterval(getmessages, 1000);
@@ -218,6 +230,11 @@ async function send() {
   await docmd('sendmsg', t);
   document.querySelector('input[type=submit]').disabled = false;
   getmessages();
+}
+
+async function set_ambient() {
+  const color = document.querySelector('#ambient_color_selection').value;
+  await docmd('ambient', color);
 }
 
 function set_petname(id) {
