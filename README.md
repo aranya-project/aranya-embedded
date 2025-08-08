@@ -1,5 +1,7 @@
 # Aranya Embedded
 
+**Hello DEF CON. If you are hear for the Arana workshop start at [the tutorial](https://github.com/aranya-project/aranya-embedded/blob/main/crates/chat-app/TUTORIAL.md).**
+
 This repository holds the various crates that make up the Aranya Embedded
 project, which adapts the [main Aranya
 project](https://github.com/aranya-project/aranya) to embedded hardware. Most

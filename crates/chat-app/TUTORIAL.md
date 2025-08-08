@@ -13,7 +13,7 @@ Our primary application is to provide a Policy Decision Point at the edge for us
 The systems consists of three main technologies. 
 
   1. A robust network sync protocol for sharing state updates between devices. This protocol is designed to be robust even with high packet loss.
-  2. A novel CRDT that has built in defenses against adversarial edits. This provides for automitic resolution of conflicting changes to state.
+  2. A novel CRDT that has built in defenses against adversarial edits. This provides for automatic resolution of conflicting changes to state.
   3. And a domain specific language and runtime for distributed protocol development.
 
 The tutorial is build on the embedded version of our toolkit which is a technology demonstration. It runs on bare metal on 32bit MCUs such as the esp32. 
