@@ -106,12 +106,7 @@ command Rainbow {
 # Ambient LED Color
 
 ```policy
-action set_ambient_color(author id, color enum AmbientColor) {
-    publish SetAmbientColor {
-        author: author,
-        color: color,
-    }
-}
+// TODO: write action to set ambient LED color
 
 effect AmbientColorChanged {
     author id,
