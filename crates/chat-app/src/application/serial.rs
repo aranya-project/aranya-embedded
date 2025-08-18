@@ -4,9 +4,10 @@ use alloc::{
     string::{String, ToString},
     vec::Vec,
 };
+use core::fmt::Write;
+
 use aranya_crypto::DeviceId;
 use bytes::{BufMut, BytesMut};
-use core::fmt::Write;
 use embassy_futures::{
     join::join,
     select::{select, Either},
@@ -23,8 +24,10 @@ use esp_hal::{gpio::GpioPin, otg_fs, peripherals::USB0};
 use esp_println::println;
 use spideroak_base58::ToBase58;
 
-use crate::application::{SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL};
-use crate::{application::ChatMessage, aranya::policy};
+use crate::{
+    application::{ChatMessage, SERIAL_IN_CHANNEL, SERIAL_OUT_CHANNEL},
+    aranya::policy,
+};
 
 const MAX_SERIAL_PACKET_SIZE: u16 = 64;
 const WEB_SOURCE: &'static str = include_str!("../../web/client.html");

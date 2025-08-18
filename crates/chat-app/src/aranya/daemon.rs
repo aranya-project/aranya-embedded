@@ -14,6 +14,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{with_timeout, Duration};
 use esp_println::println;
 
+use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
 #[cfg(feature = "net-esp-now")]
 use crate::net::espnow::EspNowNetworkInterface;
 #[cfg(feature = "net-irda")]
@@ -22,8 +23,6 @@ use crate::{
     aranya::{sink::PubSubSink, syncer::SyncEngine},
     storage::imp::*,
 };
-
-use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
 
 const ACTION_BOOST: u8 = 7;
 

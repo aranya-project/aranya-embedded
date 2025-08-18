@@ -5,6 +5,7 @@ pub mod irda;
 compile_error!("One of \"net-irda\" or \"net-esp-now\" must be enabled");
 
 use alloc::{boxed::Box, string::String};
+
 use embassy_executor::Spawner;
 use thiserror::Error;
 

@@ -25,22 +25,22 @@
 //! ```
 //!
 
-use esp_hal::gpio::Output;
-use esp_wifi::esp_now::{EspNowReceiver, EspNowSender, BROADCAST_ADDRESS};
-
-use core::io::BorrowedBuf;
-use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU32, Ordering};
-
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
+use core::{
+    io::BorrowedBuf,
+    mem::MaybeUninit,
+    sync::atomic::{AtomicU32, Ordering},
+};
+
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{Instant, Timer};
+use esp_hal::gpio::Output;
+use esp_wifi::esp_now::{EspNowReceiver, EspNowSender, BROADCAST_ADDRESS};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
-use crate::mk_static;
-use crate::util::SliceCursor;
+use crate::{mk_static, util::SliceCursor};
 
 const ESP_NOW_PACKET_QUEUE_SIZE: usize = 2;
 type Mutex<T> = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>;

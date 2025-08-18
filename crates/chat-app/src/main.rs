@@ -22,34 +22,34 @@ use embassy_executor::Spawner;
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
 use embassy_time::{Duration, Timer};
 use esp_backtrace as _;
-use esp_hal::clock::CpuClock;
-use esp_hal::gpio::{AnyPin, Input, Pull};
 #[cfg(any(feature = "net-irda", feature = "storage-sd"))]
 use esp_hal::gpio::{Level, Output};
-use esp_hal::interrupt::software::SoftwareInterruptControl;
-use esp_hal::interrupt::Priority;
-use esp_hal::peripherals::TIMG1;
-use esp_hal::timer::timg::TimerGroup;
+use esp_hal::{
+    clock::CpuClock,
+    gpio::{AnyPin, Input, Pull},
+    interrupt::{software::SoftwareInterruptControl, Priority},
+    peripherals::TIMG1,
+    timer::timg::TimerGroup,
+};
 use esp_hal_embassy::{main, InterruptExecutor};
-use esp_rmt_neopixel::{Neopixel, RgbU8};
-use esp_storage::FlashStorage;
-use hardware::neopixel::NEOPIXEL_SIGNAL;
-use log::info;
-
 #[cfg(feature = "net-irda")]
 use esp_irda_transceiver::IrdaTransceiver;
-
+use esp_rmt_neopixel::{Neopixel, RgbU8};
+use esp_storage::FlashStorage;
 #[cfg(feature = "net-esp-now")]
 use esp_wifi::{esp_now::EspNowManager, init, EspWifiController};
-
+use hardware::neopixel::NEOPIXEL_SIGNAL;
+use log::info;
+use net::NetworkEngine;
 use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Parameters};
 use static_cell::StaticCell;
 
-use crate::application::BUTTON_CHANNEL;
-use crate::aranya::policy;
-use crate::hardware::neopixel::{rainbow_at, MessageState, NeopixelMessage};
-use crate::watchdog::Watchdog;
-use net::NetworkEngine;
+use crate::{
+    application::BUTTON_CHANNEL,
+    aranya::policy,
+    hardware::neopixel::{rainbow_at, MessageState, NeopixelMessage},
+    watchdog::Watchdog,
+};
 
 const MAX_NETWORK_ENGINES: usize = 2;
 
