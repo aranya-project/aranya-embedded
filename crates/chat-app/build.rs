@@ -11,6 +11,7 @@ use aranya_policy_vm::{
     ffi::{FfiModule, ModuleSchema},
     Module,
 };
+use envelope_ffi::NullEnvelope;
 use rkyv::rancor::Error;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -22,8 +23,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     Ok(())
 }
-
-include!("src/aranya/envelope.rs");
 
 fn aranya_setup() {
     let ffi_schema: &[ModuleSchema<'static>] = &[NullEnvelope::SCHEMA];
