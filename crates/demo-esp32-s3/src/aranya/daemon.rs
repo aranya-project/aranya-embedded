@@ -1,6 +1,6 @@
+use alloc::sync::Arc;
 use core::ops::DerefMut;
 
-use alloc::sync::Arc;
 use aranya_crypto::{
     dangerous::spideroak_crypto::{
         aead::{Aead, AeadKey},
@@ -11,13 +11,13 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId, PeerCache, Sink, Storage, StorageProvider, Transaction, VmEffect
+    linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
+    PeerCache, Sink, Storage, StorageProvider, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
-use crate::storage::imp::*;
-
 use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
+use crate::storage::imp::*;
 
 // Use short names so we can more easily add generics.
 /// CE = Crypto Engine
@@ -119,10 +119,18 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
         // Update peer cache
         let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-        let storage = client.provider().get_storage(self.graph_id).map_err(|e| ClientError::StorageError(e))?;
+        let storage = client
+            .provider()
+            .get_storage(self.graph_id)
+            .map_err(|e| ClientError::StorageError(e))?;
         for addr in addresses {
-            if let Some(cmd_loc) = storage.get_location(addr).map_err(|e| ClientError::StorageError(e))? {
-                peer_cache.add_command(storage, addr, cmd_loc).map_err(|e| ClientError::StorageError(e))?;
+            if let Some(cmd_loc) = storage
+                .get_location(addr)
+                .map_err(|e| ClientError::StorageError(e))?
+            {
+                peer_cache
+                    .add_command(storage, addr, cmd_loc)
+                    .map_err(|e| ClientError::StorageError(e))?;
             }
         }
 
@@ -145,7 +153,12 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
 fn dump_commands(cmds: &[impl Command]) {
     for c in cmds {
-        log::info!("  priority {:?} {} MAX_CUT {}", c.priority(), c.id(), c.max_cut().unwrap());
+        log::info!(
+            "  priority {:?} {} MAX_CUT {}",
+            c.priority(),
+            c.id(),
+            c.max_cut().unwrap()
+        );
     }
 }
 

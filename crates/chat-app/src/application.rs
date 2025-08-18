@@ -2,12 +2,11 @@ extern crate alloc;
 
 pub mod serial;
 
-use core::fmt;
-
 use alloc::{
     boxed::Box,
     string::{String, ToString},
 };
+use core::fmt;
 
 use aranya_crypto::DeviceId;
 use aranya_policy_vm::Text;

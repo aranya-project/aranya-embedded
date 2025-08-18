@@ -33,11 +33,13 @@
 //!          as a pulse and a 1 bit as no pulse. So a simultaneously transmitted 0 colliding with a
 //!          1 will cause the 1 to flip to a 0.
 
-use core::io::BorrowedBuf;
-use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
-
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
+use core::{
+    io::BorrowedBuf,
+    mem::MaybeUninit,
+    sync::atomic::{AtomicU32, AtomicU8, Ordering},
+};
+
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{Duration, Instant, Timer};
@@ -45,8 +47,7 @@ use esp_irda_transceiver::{IrdaReceiver, IrdaTransceiver, IrdaTransmitter, UartE
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
-use crate::mk_static;
-use crate::util::SliceCursor;
+use crate::{mk_static, util::SliceCursor};
 
 const IR_PACKET_QUEUE_SIZE: usize = 2;
 type Mutex<T> = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>;
@@ -186,7 +187,7 @@ impl<'o> IrNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: IrPacket) -> Result<u16, IrError> {
-        // 
+        //
         loop {
             let last_rx = Instant::from_ticks(self.last_rx.load(Ordering::Relaxed) as u64);
             if Instant::now() - last_rx < TRANSMIT_GUARD_DURATION {

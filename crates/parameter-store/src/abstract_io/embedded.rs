@@ -1,8 +1,7 @@
 #![cfg(feature = "embedded")]
 
-use crate::ParameterStoreError;
-
 use super::AbstractIO;
+use crate::ParameterStoreError;
 
 pub struct EmbeddedStorageIO<S> {
     storage: S,

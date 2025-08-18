@@ -4,11 +4,11 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::cell::RefCell;
 
 use aranya_crypto::Id;
-use aranya_runtime::linear::LinearStorageProvider;
-use aranya_runtime::storage::linear::io;
-use aranya_runtime::{GraphId, Location, StorageError as AranyaStorageError};
-use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
-use embassy_sync::blocking_mutex::Mutex;
+use aranya_runtime::{
+    linear::LinearStorageProvider, storage::linear::io, GraphId, Location,
+    StorageError as AranyaStorageError,
+};
+use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
 use embedded_storage::Storage;
 use esp_partition_table::{DataPartitionType, PartitionEntry, PartitionTable, PartitionType};
 use esp_storage::FlashStorage;

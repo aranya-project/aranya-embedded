@@ -1,13 +1,18 @@
+use std::{
+    env,
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
+
 use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
-use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
-use aranya_policy_vm::Module;
+use aranya_policy_vm::{
+    ffi::{FfiModule, ModuleSchema},
+    Module,
+};
 use rkyv::rancor::Error;
 use ron::de::from_str;
-use std::env;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
 
 #[derive(serde::Deserialize)]
 pub struct BaseConfiguration {
@@ -67,8 +72,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 include!("src/aranya/envelope.rs");
 
 fn aranya_setup() {
-    let ffi_schema: &[ModuleSchema<'static>] =
-        &[NullEnvelope::SCHEMA];
+    let ffi_schema: &[ModuleSchema<'static>] = &[NullEnvelope::SCHEMA];
     // Parse policy
     let ast =
         parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");

@@ -1,13 +1,13 @@
-use core::{
-    cell::RefCell,
-    sync::atomic::{AtomicUsize, Ordering},
-};
-
 use alloc::{
     collections::btree_map::BTreeMap,
     string::{String, ToString},
     vec::Vec,
 };
+use core::{
+    cell::RefCell,
+    sync::atomic::{AtomicUsize, Ordering},
+};
+
 use esp_println::println;
 use owo_colors::OwoColorize;
 use tracing::{field::Visit, span};

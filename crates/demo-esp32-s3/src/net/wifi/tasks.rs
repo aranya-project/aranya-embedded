@@ -1,11 +1,12 @@
 use core::str::FromStr;
 
-use crate::built::wifi_config::{WIFI_PASSWORD, WIFI_SSID};
 use embassy_net::Runner;
 use esp_println::println;
 use esp_wifi::wifi::{
     ClientConfiguration, Configuration, WifiController, WifiDevice, WifiEvent, WifiStaDevice,
 };
+
+use crate::built::wifi_config::{WIFI_PASSWORD, WIFI_SSID};
 /// This handles setting up a ESP32 as a client
 #[embassy_executor::task]
 pub async fn connection(mut controller: WifiController<'static>) {

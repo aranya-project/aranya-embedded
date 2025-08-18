@@ -2,11 +2,9 @@ mod embedded;
 mod file;
 
 #[cfg(feature = "embedded")]
-pub use embedded::*;
-
+pub use self::embedded::*;
 #[cfg(feature = "std")]
-pub use file::*;
-
+pub use self::file::*;
 use crate::ParameterStoreError;
 
 // AbstractIO is a very basic wrapper for underlying IO implementations. It is an

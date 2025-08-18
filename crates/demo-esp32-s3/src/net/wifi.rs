@@ -3,22 +3,19 @@
 //mod addr;
 mod tasks;
 
+use alloc::{collections::btree_map::BTreeMap, format, string::String, vec::Vec};
 use core::sync::atomic::{AtomicU32, Ordering};
 
-use alloc::collections::btree_map::BTreeMap;
-use alloc::{format, string::String, vec::Vec};
 use embassy_executor::Spawner;
-use embassy_net::IpListenEndpoint;
 use embassy_net::{
     tcp::{ConnectError, TcpSocket},
-    IpAddress, IpEndpoint, Stack, StackResources,
+    IpAddress, IpEndpoint, IpListenEndpoint, Stack, StackResources,
 };
 use embedded_io_async::Write;
 use esp_hal::peripheral::Peripheral;
 use esp_wifi::{wifi::WifiStaDevice, EspWifiController, EspWifiRngSource, EspWifiTimerSource};
-use tasks::{connection, net_task};
-//use tasks::client::connection;
 
+use self::tasks::{connection, net_task};
 use super::{Network, NetworkError};
 
 type Mutex<T> = embassy_sync::mutex::Mutex<embassy_sync::blocking_mutex::raw::NoopRawMutex, T>;

@@ -1,20 +1,25 @@
-use alloc::collections::btree_map;
-use alloc::string::String;
-use alloc::vec;
-use alloc::{boxed::Box, collections::btree_map::BTreeMap};
+use alloc::{
+    boxed::Box,
+    collections::{btree_map, btree_map::BTreeMap},
+    string::String,
+    vec,
+};
+
 use aranya_crypto::Rng;
-use aranya_runtime::Command;
 use aranya_runtime::{
-    Address, GraphId, Location, PeerCache, Storage, StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction, MAX_SYNC_MESSAGE_SIZE,
-    linear::LinearSegment, Segment,
+    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
+    StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
+    Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
 
-use crate::hardware::neopixel::NeopixelSink;
 use crate::{
-    aranya::daemon::{PE, SP},
-    aranya::error::Result,
+    aranya::{
+        daemon::{PE, SP},
+        error::Result,
+    },
+    hardware::neopixel::NeopixelSink,
     net::{Message, NetworkInterface},
     Imp,
 };
@@ -31,11 +36,12 @@ pub enum SyncMessageType {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct HelloMessage<N> where
+pub struct HelloMessage<N>
+where
     N: NetworkInterface,
     //N::Addr: Default + Ord + serde::Serialize + for<'b> serde::Deserialize<'b>, {
     //N::Addr: Default + Ord + serde::Serialize + serde::Deserialize, {
-    {
+{
     address: N::Addr,
     head: Address,
     peer_count: u16,
@@ -185,7 +191,7 @@ where
     }
 
     async fn send_hello(&self) -> Result<()> {
-         let graph_id = self.imp.graph_id();
+        let graph_id = self.imp.graph_id();
 
         // BUG: check if it the same as our head before accessing storage.
 
@@ -195,9 +201,7 @@ where
         let head = storage.get_head()?;
 
         let segment = storage.get_segment(head)?;
-        let command = segment
-            .get_command(head)
-            .expect("location must exist");
+        let command = segment.get_command(head).expect("location must exist");
 
         let address = Address {
             id: command.id(),
@@ -229,7 +233,6 @@ where
         while responder.ready() {
             let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
             let len = {
-
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
                 responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
@@ -319,8 +322,6 @@ where
                     let address = hello.address;
                     self.sync_peer(address).await?;
                 }
-
-
             }
         }
         Ok(())

@@ -23,29 +23,29 @@
 //! | magic           | recipient |  sender   | message_seq | chunk_len | total_len |
 //! | F0h | 0Fh | F0h |    u16    |    u16    |      u8     |    u16    |    u16    |
 //! ```
-//! 
-
-
-use esp_hal::gpio::Input;
-use esp_wifi::esp_now::{BROADCAST_ADDRESS, EspNowReceiver, EspNowSender};
-
-use core::io::BorrowedBuf;
-use core::mem::MaybeUninit;
-use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
+//!
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
+use core::{
+    io::BorrowedBuf,
+    mem::MaybeUninit,
+    sync::atomic::{AtomicU32, AtomicU8, Ordering},
+};
+
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{Duration, Instant, Timer};
+use esp_hal::gpio::Input;
+use esp_wifi::esp_now::{EspNowReceiver, EspNowSender, BROADCAST_ADDRESS};
 use raptorq::{EncodingPacket, ObjectTransmissionInformation};
 
 use super::{Message, NetworkEngine, NetworkError, NetworkInterface};
-use crate::mk_static;
-use crate::util::SliceCursor;
+use crate::{mk_static, util::SliceCursor};
 
 const ESP_NOW_PACKET_QUEUE_SIZE: usize = 2;
 type Mutex<T> = embassy_sync::mutex::Mutex<CriticalSectionRawMutex, T>;
-type Channel<T> = embassy_sync::channel::Channel<CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
+type Channel<T> =
+    embassy_sync::channel::Channel<CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
 type Sender<'a, T> =
     embassy_sync::channel::Sender<'a, CriticalSectionRawMutex, T, ESP_NOW_PACKET_QUEUE_SIZE>;
 type Receiver<'a, T> =
@@ -57,8 +57,11 @@ const ESP_NOW_CHUNK_SIZE: usize = 64; // needs to be less than 65536 because thi
 const ESP_NOW_HEADER_SIZE: usize = 9; // recipient, sender, chunk_seq, chunk_len, total_len
 const ESP_NOW_CRC_SIZE: usize = (CRC.algorithm.width / 8) as usize;
 const RAPTORQ_OVERHEAD: usize = 4; // determined empirically - I don't know if there's a way to ask raptorq for this
-const ESP_NOW_PACKET_SIZE: usize =
-    ESP_NOW_MAGIC.len() + ESP_NOW_HEADER_SIZE + ESP_NOW_CHUNK_SIZE + ESP_NOW_CRC_SIZE + RAPTORQ_OVERHEAD;
+const ESP_NOW_PACKET_SIZE: usize = ESP_NOW_MAGIC.len()
+    + ESP_NOW_HEADER_SIZE
+    + ESP_NOW_CHUNK_SIZE
+    + ESP_NOW_CRC_SIZE
+    + RAPTORQ_OVERHEAD;
 
 /// The minimum time to wait between packets.
 const RANDOM_MIN: u32 = 25;
@@ -146,7 +149,7 @@ impl EspNowMessageReconstructor {
 
 /// `EspNowNetworkEngine` manages turning a message into a series of packets and back again.
 pub(crate) struct EspNowNetworkEngine<'a> {
-    sender:  Mutex<EspNowSender<'a>>,
+    sender: Mutex<EspNowSender<'a>>,
     receiver: Mutex<EspNowReceiver<'a>>,
     my_address: u16,
     input_buf: Mutex<[u8; ESP_NOW_PACKET_SIZE]>,
@@ -157,10 +160,10 @@ pub(crate) struct EspNowNetworkEngine<'a> {
 
 impl<'o> EspNowNetworkEngine<'o> {
     /// Create a new `EspNowNetworkInterface`.
-    fn new(    
-        sender:  Mutex<EspNowSender<'o>>,
+    fn new(
+        sender: Mutex<EspNowSender<'o>>,
         receiver: Mutex<EspNowReceiver<'o>>,
-        my_address: u16
+        my_address: u16,
     ) -> EspNowNetworkEngine<'o> {
         EspNowNetworkEngine {
             sender,
@@ -200,8 +203,13 @@ impl<'o> EspNowNetworkEngine<'o> {
             let mut bc = bb.unfilled();
             bc.append(&u16::to_be_bytes(crc));
         }
-        
-        self.sender.lock().await.send_async(&BROADCAST_ADDRESS, bb.filled()).await.map_err(|_| EspNowError::EspNow)?;
+
+        self.sender
+            .lock()
+            .await
+            .send_async(&BROADCAST_ADDRESS, bb.filled())
+            .await
+            .map_err(|_| EspNowError::EspNow)?;
 
         Ok(crc)
     }
@@ -210,7 +218,6 @@ impl<'o> EspNowNetworkEngine<'o> {
         self.last_rx
             .store(Instant::now().as_ticks() as u32, Ordering::Relaxed);
     }
-
 
     /// Read data from the transceiver until we find a packet.
     async fn recv_packet(&self) -> Result<EspNowPacket, EspNowError> {
@@ -234,7 +241,7 @@ impl<'o> EspNowNetworkEngine<'o> {
             let (sender, chunk_seq, chunk_len, total_len) = {
                 let mut sc = SliceCursor::new(&input_buf[0..ESP_NOW_HEADER_SIZE]);
                 let recipient = sc.next_u16_be();
-                if recipient != self.my_address && recipient != EspNowNetworkInterface::BROADCAST{
+                if recipient != self.my_address && recipient != EspNowNetworkInterface::BROADCAST {
                     log::info!(
                         "recv_packet: packet not for me (address: {}); for {} ",
                         self.my_address,
@@ -362,7 +369,6 @@ impl EspNowNetworkInterface<'_> {
             log::info!("EspNow: Sending Packet");
             self.send_tx.send(packet).await;
             log::info!("EspNow: Sent Packet");
-
         }
         Ok(())
     }
@@ -416,12 +422,14 @@ impl NetworkInterface for EspNowNetworkInterface<'_> {
     }
 }
 
-
 /// Starts the Esp Now networking engine and returns and interface to it.
 pub(crate) async fn start(
     sender: Mutex<EspNowSender<'static>>,
     receiver: Mutex<EspNowReceiver<'static>>,
     my_address: u16,
 ) -> &'static EspNowNetworkEngine<'static> {
-    mk_static!(EspNowNetworkEngine, EspNowNetworkEngine::new(sender, receiver, my_address))
+    mk_static!(
+        EspNowNetworkEngine,
+        EspNowNetworkEngine::new(sender, receiver, my_address)
+    )
 }

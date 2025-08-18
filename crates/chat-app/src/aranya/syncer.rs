@@ -1,23 +1,22 @@
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec};
 use core::task::Poll;
 
-use alloc::string::String;
-use alloc::vec;
-use alloc::{boxed::Box, collections::btree_map::BTreeMap};
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    Address, GraphId, PeerCache, Segment, Storage, StorageProvider, SyncError, SyncRequestMessage,
-    SyncRequester, SyncResponder, SyncType, Transaction, MAX_SYNC_MESSAGE_SIZE,
+    Address, ClientError, Command, GraphId, PeerCache, Segment, Storage, StorageProvider,
+    SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction,
+    MAX_SYNC_MESSAGE_SIZE,
 };
-use aranya_runtime::{ClientError, Command};
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
 use parameter_store::MAX_PEERS;
 
-use crate::aranya::daemon::Client;
-use crate::aranya::sink::PubSubSink;
 use crate::{
-    aranya::daemon::{PE, SP},
-    aranya::error::Result,
+    aranya::{
+        daemon::{Client, PE, SP},
+        error::Result,
+        sink::PubSubSink,
+    },
     net::{Message, NetworkInterface},
 };
 
@@ -304,7 +303,8 @@ where
                     &mut self.sink,
                     client,
                     self.graph_id,
-                ).await?;
+                )
+                .await?;
             }
         } else {
             // We're done, destroy the requester

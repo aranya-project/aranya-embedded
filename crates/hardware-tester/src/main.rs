@@ -8,30 +8,34 @@ extern crate alloc;
 
 mod hardware;
 
-use adafruit_seesaw::devices::{NeoKey1x4, SeesawDevice, SeesawDeviceInit};
-use adafruit_seesaw::prelude::NeopixelModule;
-use adafruit_seesaw::rgb::Rgb;
-use adafruit_seesaw::SeesawRefCell;
+use adafruit_seesaw::{
+    devices::{NeoKey1x4, SeesawDevice, SeesawDeviceInit},
+    prelude::NeopixelModule,
+    rgb::Rgb,
+    SeesawRefCell,
+};
 use board_defs::SdPinDef;
 use embassy_executor::Spawner;
 use embassy_time::{Duration, Timer, WithTimeout};
 use embedded_hal_bus::spi::ExclusiveDevice;
 use embedded_sdmmc::{SdCard, VolumeIdx, VolumeManager};
 use esp_backtrace as _;
-use esp_hal::clock::CpuClock;
-use esp_hal::delay::Delay;
-use esp_hal::gpio::{Input, Level, Output, Pull};
-use esp_hal::i2c::master::I2c;
-use esp_hal::peripheral::Peripheral;
-use esp_hal::spi::{self, master::Spi};
-use esp_hal::timer::timg::TimerGroup;
-use esp_hal::{i2c, Blocking};
+use esp_hal::{
+    clock::CpuClock,
+    delay::Delay,
+    gpio::{Input, Level, Output, Pull},
+    i2c,
+    i2c::master::I2c,
+    peripheral::Peripheral,
+    spi::{self, master::Spi},
+    timer::timg::TimerGroup,
+    Blocking,
+};
 use esp_hal_embassy::main;
-use esp_println::{print, println};
-use fugit::RateExtU32 as _;
-
 use esp_irda_transceiver::IrdaTransceiver;
+use esp_println::{print, println};
 use esp_rmt_neopixel::Neopixel;
+use fugit::RateExtU32 as _;
 use log::info;
 
 macro_rules! menu {

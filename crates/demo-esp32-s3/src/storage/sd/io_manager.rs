@@ -1,17 +1,19 @@
 #![cfg(feature = "storage-sd")]
 
-use alloc::rc::Rc;
-use alloc::string::{String, ToString};
+use alloc::{
+    format,
+    rc::Rc,
+    string::{String, ToString},
+    vec,
+    vec::Vec,
+};
 
-use alloc::vec::Vec;
-use alloc::{format, vec};
 use aranya_runtime::{linear, GraphId, Location, StorageError};
 use embedded_sdmmc::{Mode, RawFile, VolumeIdx};
 use esp_println::println;
 use owo_colors::OwoColorize;
 use postcard::{from_bytes, to_allocvec};
-use serde::de::DeserializeOwned;
-use serde::Serialize;
+use serde::{de::DeserializeOwned, Serialize};
 
 use super::VolumeMan;
 

@@ -1,12 +1,17 @@
+use std::{
+    env,
+    fs::{self, File},
+    io::Write,
+    path::Path,
+};
+
 use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
-use aranya_policy_vm::ffi::{FfiModule, ModuleSchema};
-use aranya_policy_vm::Module;
+use aranya_policy_vm::{
+    ffi::{FfiModule, ModuleSchema},
+    Module,
+};
 use rkyv::rancor::Error;
-use std::env;
-use std::fs::{self, File};
-use std::io::Write;
-use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     aranya_setup();
