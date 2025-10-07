@@ -192,4 +192,4 @@ new value.
 
 For a more detailed specification of the policy language, see our
 [policy language
-specification](https://github.com/aranya-project/aranya-docs/blob/main/docs/policy-v2.md).
+specification](https://github.com/aranya-project/aranya-docs/blob/main/docs/policy-v1.md).
