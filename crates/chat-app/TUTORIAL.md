@@ -143,12 +143,11 @@ cargo run --release
 
 This should ask you which device you want to connect to. If you don't see a serial device check that it is plugged in. If you can select the device but it will not upload the program you may need to unplug the board and plug it back in while holding down the large button on the board. Once it is plugged in you can release the button and retry the `cargo run --release` command.
 
-This should write the program to the device. You will have to reset the
-device to get it working. The easiest way to do this is to unplug it and
-replug it.
+This should write the program to the device. \
+Once you see the **Flashing has completed!** message, you can exit the espflash tool with <kbd>Ctrl+C</kbd>.
+In order to run the newly flashed application, you'll have to restart the board _without_ entering bootloader mode. Simply unplug it and re-plug it in.
 
-If it's working, you should get a brief orange flash from the main LED
-and see some blinking on the smaller LEDs next to the button.
+If it's working, you should get a brief orange flash from the main LED on bootup and see some blinking on the smaller LEDs next to the button.
 
 ## Logging On
 
