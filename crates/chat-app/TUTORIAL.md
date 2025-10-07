@@ -138,10 +138,10 @@ espflash write-bin 0x9000 params.bin
 Now it's time to deploy. Plug in your board to your computer using a usb-c cable while holding down the large black button on the board. (You can release the button after the usb cable is plugged into the dev board and computer.)
 
 ```
-cargo run --release
+cargo run
 ```
 
-This should ask you which device you want to connect to. If you don't see a serial device check that it is plugged in. If you can select the device but it will not upload the program you may need to unplug the board and plug it back in while holding down the large button on the board. Once it is plugged in you can release the button and retry the `cargo run --release` command.
+This should ask you which device you want to connect to. If you don't see a serial device check that it is plugged in. If you can select the device but it will not upload the program you may need to unplug the board and plug it back in while holding down the large button on the board. Once it is plugged in you can release the button and retry the `cargo run` command.
 
 This should write the program to the device. \
 Once you see the **Flashing has completed!** message, you can exit the espflash tool with <kbd>Ctrl+C</kbd>.
