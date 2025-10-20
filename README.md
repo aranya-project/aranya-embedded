@@ -47,8 +47,7 @@ the individual crates and read their `README`s before attempting any builds.
 Aranya and Aranya Embedded require a [rust development
 environment](https://www.rust-lang.org/), but compiling esp32 projects requires
 some extra setup beyond that. Please follow the instructions in [The Rust on
-ESP Book](https://docs.esp-rs.org/book/installation/index.html) for installing
-for both RISC-V and Xtensa targets.
+ESP Book](https://docs.espressif.com/projects/rust/book) for installing the toolchain for both RISC-V and Xtensa targets.
 
 ## Contributing
 

@@ -20,7 +20,7 @@ The tutorial is build on the embedded version of our toolkit which is a technolo
 
 The production version can be found at [https://github.com/aranya-project/aranya](https://github.com/aranya-project/aranya) and is targeted at linux environments.
 
-By completing the tutorial and challenges you will gain an understanding on how to use the tool chain to build and flash Aranya to and esp32 as well as lean a few basics about how to build protocols using Aranya.
+By completing the tutorial and challenges you will gain an understanding on how to use the tool chain to build and flash Aranya to and esp32 as well as learn a few basics about how to build protocols using Aranya.
 
 ## Prerequisites
 
