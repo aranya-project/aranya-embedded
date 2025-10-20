@@ -48,7 +48,7 @@ Aranya and Aranya Embedded require a [rust development
 environment](https://www.rust-lang.org/), but compiling esp32 projects requires
 some extra setup beyond that. Please follow the instructions in [The Rust on
 ESP Book](https://docs.espressif.com/projects/rust/book) for installing the toolchain for both RISC-V and Xtensa targets. Navigate to the "Getting Started" -> "Toolchain Installation" section:
-[`Toolchain Instalattion`](https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html)
+[`Toolchain Installation`](https://docs.espressif.com/projects/rust/book/getting-started/toolchain.html)
 
 ## Contributing
 
