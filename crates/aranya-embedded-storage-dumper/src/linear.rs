@@ -1,4 +1,5 @@
-use aranya_runtime::{Address, CommandId, Keys, Location, PolicyId, Prior, Priority};
+use aranya_crypto::CmdId;
+use aranya_runtime::{Address, Keys, Location, PolicyId, Prior, Priority};
 use serde::{Deserialize, Serialize};
 
 use crate::plathacks::Usize32;
@@ -22,7 +23,7 @@ pub struct SegmentRepr {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct CommandData {
-    pub id: CommandId,
+    pub id: CmdId,
     pub priority: Priority,
     pub policy: Option<Bytes>,
     pub data: Bytes,

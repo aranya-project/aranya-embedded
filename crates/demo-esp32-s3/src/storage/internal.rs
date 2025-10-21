@@ -3,7 +3,7 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::cell::RefCell;
 
-use aranya_crypto::Id;
+use aranya_id::BaseId;
 use aranya_runtime::{
     linear::LinearStorageProvider, storage::linear::io, GraphId, Location,
     StorageError as AranyaStorageError,
@@ -19,7 +19,7 @@ use super::StorageError;
 #[derive(Clone, PartialEq, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
 struct EspStorageHeader {
     epoch: u32,
-    graph_id: Option<Id>,
+    graph_id: Option<BaseId>,
     head: Option<(u32, u32)>,
     stored_bytes: usize,
 }

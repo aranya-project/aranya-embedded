@@ -117,16 +117,15 @@ checksum = "e16d2d3311acee920a9eb8d33b8cbc1787ce4a264e85f964c2404b969bdcd487"
 
 [[package]]
 name = "aranya-crypto"
-version = "0.8.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.11.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
+ "aranya-id",
  "buggy",
  "byteorder",
  "ciborium",
  "ciborium-io",
  "derive-where",
- "proptest",
- "rkyv",
  "rustix",
  "serde",
  "sha3-utils",
@@ -143,6 +142,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aranya-crypto",
+ "aranya-id",
  "clap",
  "parameter-store",
 ]
@@ -152,6 +152,7 @@ name = "aranya-embedded-storage-dumper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "aranya-crypto",
  "aranya-runtime",
  "clap",
  "postcard",
@@ -160,9 +161,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "aranya-id"
+version = "0.1.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
+dependencies = [
+ "rkyv",
+ "serde",
+ "spideroak-base58",
+ "subtle",
+ "zerocopy",
+ "zerocopy-derive",
+]
+
+[[package]]
 name = "aranya-policy-ast"
-version = "0.6.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.8.1"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-policy-text",
  "rkyv",
@@ -173,8 +187,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-compiler"
-version = "0.11.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.14.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-policy-ast",
  "aranya-policy-lang",
@@ -189,8 +203,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-derive"
-version = "0.6.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.9.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-policy-lang",
  "prettyplease",
@@ -201,8 +215,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen"
-version = "0.11.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.15.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-policy-ifgen-macro",
  "aranya-policy-vm",
@@ -212,8 +226,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen-build"
-version = "0.5.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.8.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "anyhow",
  "aranya-policy-ast",
@@ -227,8 +241,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-ifgen-macro"
-version = "0.4.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.4.2"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -237,8 +251,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-lang"
-version = "0.6.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.8.1"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "anyhow",
  "aranya-policy-ast",
@@ -253,11 +267,13 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-module"
-version = "0.11.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.14.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
+ "fnv",
+ "indexmap",
  "rkyv",
  "serde",
  "thiserror",
@@ -265,8 +281,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-text"
-version = "0.1.1"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.1.3"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-policy-text-macro",
  "proptest",
@@ -278,7 +294,7 @@ dependencies = [
 [[package]]
 name = "aranya-policy-text-macro"
 version = "0.1.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "macro-string",
  "proc-macro2",
@@ -288,8 +304,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-policy-vm"
-version = "0.11.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.14.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-ast",
@@ -303,8 +319,8 @@ dependencies = [
 
 [[package]]
 name = "aranya-runtime"
-version = "0.11.0"
-source = "git+https://github.com/aranya-project/aranya-core?branch=embedded-upstreaming#102af1ed666bebe47ffaede67e5f173a4a5a8533"
+version = "0.15.0"
+source = "git+https://github.com/aranya-project/aranya-core?branch=main#a0cb7db8e859e25c14e5b84b70a8e22622620328"
 dependencies = [
  "aranya-crypto",
  "aranya-policy-vm",
@@ -312,6 +328,7 @@ dependencies = [
  "heapless",
  "postcard",
  "serde",
+ "spideroak-base58",
  "spin",
  "thiserror",
  "tracing",
@@ -456,6 +473,7 @@ name = "chat-app"
 version = "0.1.0"
 dependencies = [
  "aranya-crypto",
+ "aranya-id",
  "aranya-policy-compiler",
  "aranya-policy-ifgen",
  "aranya-policy-ifgen-build",
@@ -756,6 +774,7 @@ name = "demo-esp32-s3"
 version = "0.1.0"
 dependencies = [
  "aranya-crypto",
+ "aranya-id",
  "aranya-policy-compiler",
  "aranya-policy-ifgen",
  "aranya-policy-ifgen-build",
@@ -2446,6 +2465,7 @@ checksum = "19f5c3e5da784cd8c69d32cdc84673f3204536ca56e1fa01be31a74b92c932ac"
 dependencies = [
  "bytecheck",
  "hashbrown 0.15.4",
+ "indexmap",
  "munge",
  "ptr_meta",
  "rancor",

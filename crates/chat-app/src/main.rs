@@ -16,7 +16,7 @@ mod util;
 mod watchdog;
 
 use aranya::daemon::Daemon;
-use aranya_crypto::{DeviceId, Rng};
+use aranya_crypto::{id::IdExt, DeviceId, Rng};
 use embassy_executor::Spawner;
 #[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};

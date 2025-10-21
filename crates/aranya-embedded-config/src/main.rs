@@ -1,6 +1,6 @@
 use std::{fs::OpenOptions, path::PathBuf};
 
-use aranya_crypto::Id;
+use aranya_id::BaseId;
 use clap::Parser;
 use parameter_store::*;
 
@@ -76,7 +76,7 @@ pub fn main() -> anyhow::Result<()> {
             params
                 .graph_id
                 .map(|v| {
-                    let v: Id = v.into();
+                    let v: BaseId = v.into();
                     format!("{v}")
                 })
                 .unwrap_or(String::from("None"))
@@ -86,7 +86,7 @@ pub fn main() -> anyhow::Result<()> {
             params
                 .device_id
                 .map(|v| {
-                    let v: Id = v.into();
+                    let v: BaseId = v.into();
                     format!("{v}")
                 })
                 .unwrap_or(String::from("None"))

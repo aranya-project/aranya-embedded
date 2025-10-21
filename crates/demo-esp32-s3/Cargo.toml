@@ -10,6 +10,7 @@ envelope-ffi = { path = "../envelope-ffi" }
 esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 
+aranya-id = { workspace = true }
 aranya-runtime = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
@@ -21,9 +22,14 @@ embassy-sync = { workspace = true }
 embassy-time = { workspace = true, features = ["generic-queue-8"] }
 embedded-io-async = { workspace = true }
 esp-alloc = { workspace = true }
-esp-backtrace = { workspace = true, features = ["exception-handler", "panic-handler", "println", "custom-halt"] }
+esp-backtrace = { workspace = true, features = [
+    "exception-handler",
+    "panic-handler",
+    "println",
+    "custom-halt",
+] }
 esp-hal = { workspace = true }
-esp-hal-embassy  = { workspace = true }
+esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
 getrandom = { workspace = true, features = ["custom"] }
@@ -38,12 +44,24 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 # Dependencies enabled for "wifi"
-embassy-net = { workspace = true, features = ["tcp", "udp", "dhcpv4", "medium-ethernet"], optional = true }
-esp-wifi = { workspace = true, features = ["utils", "wifi", "log", "esp-now"], optional = true }
+embassy-net = { workspace = true, features = [
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+], optional = true }
+esp-wifi = { workspace = true, features = [
+    "utils",
+    "wifi",
+    "log",
+    "esp-now",
+], optional = true }
 
 # Enabled by "storage-internal" feature
 embedded-storage = { workspace = true, optional = true }
-esp-partition-table = { workspace = true, features = ["heapless"], optional = true }
+esp-partition-table = { workspace = true, features = [
+    "heapless",
+], optional = true }
 esp-storage = { workspace = true, features = [], optional = true }
 
 # Enabled by "storage-sd" feature
@@ -82,25 +100,10 @@ storage-internal = [
     "dep:esp-storage",
 ]
 
-storage-sd = [
-    "dep:embedded-hal-bus",
-    "dep:embedded-sdmmc",
-]
+storage-sd = ["dep:embedded-hal-bus", "dep:embedded-sdmmc"]
 
-net-wifi = [
-    "dep:esp-wifi",
-    "dep:embassy-net",
-]
+net-wifi = ["dep:esp-wifi", "dep:embassy-net"]
 
-net-irda = [
-    "dep:crc",
-    "dep:esp-irda-transceiver",
-    "dep:raptorq",
-]
+net-irda = ["dep:crc", "dep:esp-irda-transceiver", "dep:raptorq"]
 
-net-esp-now = [
-    "dep:esp-wifi",
-    "dep:embassy-net",
-    "dep:raptorq",
-    "dep:crc",
-]
+net-esp-now = ["dep:esp-wifi", "dep:embassy-net", "dep:raptorq", "dep:crc"]

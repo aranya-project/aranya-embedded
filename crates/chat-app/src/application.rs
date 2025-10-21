@@ -8,9 +8,9 @@ use alloc::{
 };
 use core::fmt;
 
-use aranya_crypto::DeviceId;
+use aranya_crypto::{CmdId, DeviceId};
 use aranya_policy_vm::Text;
-use aranya_runtime::{CommandId, VmEffect};
+use aranya_runtime::VmEffect;
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;
@@ -50,7 +50,7 @@ pub struct ChatMessage {
     /// This timestamp does not store an authoritative time value, just
     /// a relative one for query purposes.
     ts: Instant,
-    id: CommandId,
+    id: CmdId,
     author: DeviceId,
     msg: String,
 }
