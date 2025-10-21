@@ -23,10 +23,10 @@ embassy-time = { workspace = true, features = ["generic-queue-8"] }
 embedded-io-async = { workspace = true }
 esp-alloc = { workspace = true }
 esp-backtrace = { workspace = true, features = [
-    "exception-handler",
-    "panic-handler",
-    "println",
-    "custom-halt",
+  "exception-handler",
+  "panic-handler",
+  "println",
+  "custom-halt",
 ] }
 esp-hal = { workspace = true }
 esp-hal-embassy = { workspace = true }
@@ -45,22 +45,22 @@ tracing = { workspace = true }
 
 # Dependencies enabled for "wifi"
 embassy-net = { workspace = true, features = [
-    "tcp",
-    "udp",
-    "dhcpv4",
-    "medium-ethernet",
+  "tcp",
+  "udp",
+  "dhcpv4",
+  "medium-ethernet",
 ], optional = true }
 esp-wifi = { workspace = true, features = [
-    "utils",
-    "wifi",
-    "log",
-    "esp-now",
+  "utils",
+  "wifi",
+  "log",
+  "esp-now",
 ], optional = true }
 
 # Enabled by "storage-internal" feature
 embedded-storage = { workspace = true, optional = true }
 esp-partition-table = { workspace = true, features = [
-    "heapless",
+  "heapless",
 ], optional = true }
 esp-storage = { workspace = true, features = [], optional = true }
 
@@ -95,9 +95,9 @@ adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
 spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]
 
 storage-internal = [
-    "dep:embedded-storage",
-    "dep:esp-partition-table",
-    "dep:esp-storage",
+  "dep:embedded-storage",
+  "dep:esp-partition-table",
+  "dep:esp-storage",
 ]
 
 storage-sd = ["dep:embedded-hal-bus", "dep:embedded-sdmmc"]

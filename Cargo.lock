@@ -152,7 +152,6 @@ name = "aranya-embedded-storage-dumper"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aranya-crypto",
  "aranya-runtime",
  "clap",
  "postcard",

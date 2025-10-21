@@ -31,9 +31,9 @@ embedded-storage = "0.3"
 esp-alloc = "0.6.0"
 esp-backtrace = { version = "0.15.0", features = ["esp32s3"] }
 esp-hal = { version = "0.23.1", features = [
-    "esp32s3",
-    "unstable",
-    "quad-psram",
+  "esp32s3",
+  "unstable",
+  "quad-psram",
 ] }
 esp-hal-embassy = { version = "0.6.0", features = ["esp32s3"] }
 esp-partition-table = "0.1"

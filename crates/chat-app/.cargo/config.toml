@@ -2,15 +2,19 @@
 runner = "espflash flash --monitor --partition-table partitions.csv"
 
 [env]
-ESP_LOG="INFO"
-ESP_WIFI_CONFIG_COUNTRY_CODE="US"
+ESP_LOG = "INFO"
+ESP_WIFI_CONFIG_COUNTRY_CODE = "US"
 
 [build]
 rustflags = [
-  "-C", "link-arg=-nostartfiles",
-  "-C", "link-arg=-Tlinkall.x",
-  "-Z", "stack-protector=all",
-  "--cfg", "getrandom_backend=\"custom\"",
+  "-C",
+  "link-arg=-nostartfiles",
+  "-C",
+  "link-arg=-Tlinkall.x",
+  "-Z",
+  "stack-protector=all",
+  "--cfg",
+  "getrandom_backend=\"custom\"",
 ]
 
 target = "xtensa-esp32s3-none-elf"

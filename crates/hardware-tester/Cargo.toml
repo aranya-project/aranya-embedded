@@ -10,9 +10,13 @@ embassy-executor = { workspace = true, features = ["nightly"] }
 embassy-futures = { workspace = true }
 embassy-time = { workspace = true, features = ["generic-queue-8"] }
 esp-alloc = { workspace = true }
-esp-backtrace = { workspace = true, features = ["exception-handler", "panic-handler", "println"] }
+esp-backtrace = { workspace = true, features = [
+  "exception-handler",
+  "panic-handler",
+  "println",
+] }
 esp-hal = { workspace = true }
-esp-hal-embassy  = { workspace = true }
+esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
 getrandom = { workspace = true, features = ["custom"] }

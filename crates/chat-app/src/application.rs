@@ -8,9 +8,9 @@ use alloc::{
 };
 use core::fmt;
 
-use aranya_crypto::{CmdId, DeviceId};
+use aranya_crypto::DeviceId;
 use aranya_policy_vm::Text;
-use aranya_runtime::VmEffect;
+use aranya_runtime::{CmdId, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;

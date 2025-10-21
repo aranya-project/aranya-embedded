@@ -1,5 +1,4 @@
-use aranya_crypto::CmdId;
-use aranya_runtime::{Address, Keys, Location, PolicyId, Prior, Priority};
+use aranya_runtime::{Address, CmdId, Keys, Location, PolicyId, Prior, Priority};
 use serde::{Deserialize, Serialize};
 
 use crate::plathacks::Usize32;

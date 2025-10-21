@@ -1,0 +1,73 @@
+[env]
+CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = 1
+RUSTDOCFLAGS = { value = "", condition = { env_not_set = ["RUSTDOCFLAGS"] } }
+NIGHTLY = { script = [
+    "cat rust-nightly.txt",
+], condition = { env_not_set = [
+    "NIGHTLY",
+] } }
+
+RUSTFLAGS = { value = "-Dwarnings", condition = { env_true = [
+    "CARGO_MAKE_CI",
+] } }
+
+[config]
+default_to_workspace = false
+skip_core_tasks = true
+skip_git_env_info = true
+skip_rust_env_info = true
+
+
+[tasks.default]
+description = "List tasks"
+script = "cargo make --quiet --list-all-steps --hide-uninteresting"
+
+# Misc
+[tasks.install-nightly]
+description = "Install nightly rust"
+# First check if the toolchain is installed, because that is much faster.
+# Don't do this if you want to keep a rolling channel up-to-date.
+script = "rustup run ${NIGHTLY} true 2>/dev/null || rustup toolchain install ${NIGHTLY} --profile minimal -c rustfmt"
+
+# Correctness
+[tasks.check-fmt]
+dependencies = ["check-fmt-rust", "check-fmt-toml"]
+description = "Check file formatting"
+
+[tasks.fmt]
+dependencies = ["fmt-rust", "fmt-toml"]
+description = "Format files"
+
+[tasks.check-fmt-rust]
+category = "correctness"
+description = "Check rust code formatting"
+toolchain = "${NIGHTLY}"
+command = "cargo"
+args = ["fmt", "--all", "--", "--check"]
+dependencies = ["install-nightly"]
+
+[tasks.fmt-rust]
+category = "correctness"
+description = "Format rust code"
+toolchain = "${NIGHTLY}"
+command = "cargo"
+args = ["fmt", "--all"]
+dependencies = ["install-nightly"]
+
+[tasks.check-fmt-toml]
+category = "correctness"
+description = "Check toml formatting"
+script = "git ls-files -z '*.toml' | xargs -0 -- taplo fmt --check --diff"
+dependencies = ["install-taplo"]
+
+[tasks.fmt-toml]
+category = "correctness"
+description = "Format toml"
+script = "git ls-files -z '*.toml' | xargs -0 taplo fmt"
+dependencies = ["install-taplo"]
+
+[tasks.install-taplo]
+private = true
+install_crate = { crate_name = "taplo-cli", version = "0.9.3", binary = "taplo", test_arg = [
+    "-V",
+] }
