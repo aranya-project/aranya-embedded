@@ -56,8 +56,8 @@ impl NullEnvelope {
         };
 
         Ok(Envelope {
-            parent_id: parent_id.into(),
-            author_id: author_id.into(),
+            parent_id: parent_id.as_base(),
+            author_id: author_id.as_base(),
             command_id,
             payload,
             // TODO(chip): use an actual signature

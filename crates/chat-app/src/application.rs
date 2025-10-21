@@ -64,7 +64,7 @@ impl TryFrom<VmEffect> for ChatMessage {
         Ok(ChatMessage {
             ts: Instant::now(),
             id: value.command,
-            author: mr.author.into(),
+            author: DeviceId::from_base(mr.author),
             msg: mr.msg.to_string(),
         })
     }
@@ -174,7 +174,7 @@ impl Application {
                                 .await;
                             SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }
-                        SerialCommand::SetAmbientColor(color) => {
+                        SerialCommand::SetAmbientColor(_color) => {
                             // TODO: send the action
                             SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }

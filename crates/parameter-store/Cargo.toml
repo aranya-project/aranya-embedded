@@ -14,5 +14,5 @@ thiserror = { workspace = true }
 embedded-storage = { workspace = true, optional = true }
 
 [features]
-std = []
 embedded = ["dep:embedded-storage"]
+std = []

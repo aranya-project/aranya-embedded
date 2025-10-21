@@ -7,14 +7,14 @@ ESP_WIFI_CONFIG_COUNTRY_CODE = "US"
 
 [build]
 rustflags = [
-  "-C",
-  "link-arg=-nostartfiles",
-  "-C",
-  "link-arg=-Tlinkall.x",
-  "-Z",
-  "stack-protector=all",
-  "--cfg",
-  "getrandom_backend=\"custom\"",
+    "-C",
+    "link-arg=-nostartfiles",
+    "-C",
+    "link-arg=-Tlinkall.x",
+    "-Z",
+    "stack-protector=all",
+    "--cfg",
+    "getrandom_backend=\"custom\"",
 ]
 
 target = "xtensa-esp32s3-none-elf"
@@ -29,7 +29,7 @@ codegen-units = 1
 opt-level = "s"
 
 [profile.release]
-codegen-units = 1        # LLVM can perform better optimizations using a single thread
+codegen-units = 1 # LLVM can perform better optimizations using a single thread
 debug = false
 debug-assertions = false
 incremental = false

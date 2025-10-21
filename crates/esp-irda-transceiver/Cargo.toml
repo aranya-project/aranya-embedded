@@ -9,6 +9,6 @@ license = "MIT"
 publish = false
 
 [dependencies]
-esp32s3 = { workspace = true }
-esp-hal = { workspace = true }
 embassy-sync = { workspace = true }
+esp-hal = { workspace = true }
+esp32s3 = { workspace = true }
