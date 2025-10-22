@@ -27,6 +27,10 @@ action create_team(nonce bytes) {
 effect TeamCreated {}
 
 command Init {
+    attributes {
+        init: true,
+    }
+
     fields {
         nonce bytes,
     }
@@ -55,6 +59,10 @@ effect MessageReceived {
 }
 
 command ChatMessage {
+    attributes {
+        priority: 0,
+    }
+
     fields {
         author id,
         msg string,
@@ -86,6 +94,10 @@ effect RainbowEffect {
 }
 
 command Rainbow {
+    attributes {
+        priority: 0,
+    }
+
     fields {
         author id
     }
@@ -114,6 +126,10 @@ effect AmbientColorChanged {
 }
 
 command SetAmbientColor {
+    attributes {
+        priority: 0,
+    }
+
     fields {
         author id,
         color enum AmbientColor,
