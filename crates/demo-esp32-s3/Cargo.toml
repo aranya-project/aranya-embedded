@@ -100,10 +100,25 @@ storage-internal = [
     "dep:esp-storage",
 ]
 
-storage-sd = ["dep:embedded-hal-bus", "dep:embedded-sdmmc"]
+rage-sd = [
+    "dep:embedded-hal-bus",
+    "dep:embedded-sdmmc",
+]
 
-net-wifi = ["dep:embassy-net", "dep:esp-wifi"]
+net-wifi = [
+    "dep:esp-wifi",
+    "dep:embassy-net",
+]
 
-net-irda = ["dep:crc", "dep:esp-irda-transceiver", "dep:raptorq"]
+net-irda = [
+    "dep:crc",
+    "dep:esp-irda-transceiver",
+    "dep:raptorq",
+]
 
-net-esp-now = ["dep:crc", "dep:embassy-net", "dep:esp-wifi", "dep:raptorq"]
+net-esp-now = [
+    "dep:esp-wifi",
+    "dep:embassy-net",
+    "dep:raptorq",
+    "dep:crc",
+]

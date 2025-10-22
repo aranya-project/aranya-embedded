@@ -88,10 +88,21 @@ storage-internal = [
     "dep:esp-storage",
 ]
 
-storage-sd = ["dep:embedded-hal-bus", "dep:embedded-sdmmc"]
+storage-sd = [
+    "dep:embedded-hal-bus",
+    "dep:embedded-sdmmc",
+]
 
-net-irda = ["dep:crc", "dep:esp-irda-transceiver", "dep:raptorq"]
+net-irda = [
+    "dep:crc",
+    "dep:esp-irda-transceiver",
+    "dep:raptorq",
+]
 
-net-esp-now = ["dep:crc", "dep:esp-wifi", "dep:raptorq"]
+net-esp-now = [
+    "dep:esp-wifi",
+    "dep:raptorq",
+    "dep:crc",
+]
 
 vendor-specific-usb = []
