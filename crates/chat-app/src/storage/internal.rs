@@ -458,11 +458,7 @@ where
     ) -> Result<impl Iterator<Item = Result<GraphId, AranyaStorageError>>, AranyaStorageError> {
         let header = fetch_header(&self.storage, self.base)
             .map_err(log_error(AranyaStorageError::NoSuchStorage))?;
-        if let Some(graph_id) = header.graph_id {
-            Ok(alloc::vec![Ok(GraphId::from_base(graph_id.as_base()))].into_iter())
-        } else {
-            Ok(alloc::vec![].into_iter())
-        }
+        Ok(header.graph_id.into_iter().map(Ok))
     }
 
     fn remove(&mut self, _id: GraphId) -> Result<(), AranyaStorageError> {
