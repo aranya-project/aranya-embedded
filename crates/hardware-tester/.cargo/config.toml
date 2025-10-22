@@ -2,8 +2,8 @@
 runner = "espflash flash --monitor --partition-table partitions.csv"
 
 [env]
-ESP_LOG = "INFO"
-ESP_WIFI_CONFIG_COUNTRY_CODE = "US"
+ESP_LOG="INFO"
+ESP_WIFI_CONFIG_COUNTRY_CODE="US"
 
 [build]
 rustflags = [
