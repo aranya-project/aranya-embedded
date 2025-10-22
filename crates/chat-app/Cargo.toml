@@ -11,7 +11,6 @@ esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 
 aranya-crypto = { workspace = true, features = ["memstore"] }
-aranya-id = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
 aranya-runtime = { workspace = true }
