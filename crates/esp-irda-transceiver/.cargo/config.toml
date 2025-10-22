@@ -6,12 +6,9 @@ ESP_LOG = "INFO"
 
 [build]
 rustflags = [
-    "-C",
-    "link-arg=-nostartfiles",
-    "-C",
-    "link-arg=-Tlinkall.x",
-    "-Z",
-    "stack-protector=all",
+    "-Clink-arg=-nostartfiles",
+    "-Clink-arg=-Tlinkall.x",
+    "-Zstack-protector=all",
 ]
 
 target = "xtensa-esp32s3-none-elf"

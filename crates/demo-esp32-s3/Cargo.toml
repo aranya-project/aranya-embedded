@@ -106,8 +106,8 @@ storage-sd = [
 ]
 
 net-wifi = [
-    "dep:esp-wifi",
     "dep:embassy-net",
+    "dep:esp-wifi",
 ]
 
 net-irda = [
@@ -117,8 +117,8 @@ net-irda = [
 ]
 
 net-esp-now = [
-    "dep:esp-wifi",
-    "dep:embassy-net",
-    "dep:raptorq",
     "dep:crc",
+    "dep:embassy-net",
+    "dep:esp-wifi",
+    "dep:raptorq",
 ]

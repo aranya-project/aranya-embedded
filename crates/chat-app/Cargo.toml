@@ -99,9 +99,9 @@ net-irda = [
 ]
 
 net-esp-now = [
+    "dep:crc",
     "dep:esp-wifi",
     "dep:raptorq",
-    "dep:crc",
 ]
 
 vendor-specific-usb = []
