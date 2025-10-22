@@ -7,10 +7,11 @@ ESP_WIFI_CONFIG_COUNTRY_CODE = "US"
 
 [build]
 rustflags = [
-    "-Clink-arg=-nostartfiles",
-    "-Clink-arg=-Tlinkall.x",
-    "-Zstack-protector=all",
+    "--codegen=link-arg=-nostartfiles",
+    "--codegen=link-arg=-Tlinkall.x",
     "--cfg=getrandom_backend=\"custom\"",
+    "-Z",
+    "stack-protector=all",
 ]
 target = "xtensa-esp32s3-none-elf"
 
