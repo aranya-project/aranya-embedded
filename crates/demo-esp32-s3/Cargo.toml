@@ -100,7 +100,7 @@ storage-internal = [
     "dep:esp-storage",
 ]
 
-rage-sd = [
+storage-sd = [
     "dep:embedded-hal-bus",
     "dep:embedded-sdmmc",
 ]
