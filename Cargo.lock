@@ -140,7 +140,6 @@ name = "aranya-embedded-config"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aranya-crypto",
  "aranya-id",
  "clap",
  "parameter-store",
@@ -473,7 +472,6 @@ name = "chat-app"
 version = "0.1.0"
 dependencies = [
  "aranya-crypto",
- "aranya-id",
  "aranya-policy-compiler",
  "aranya-policy-ifgen",
  "aranya-policy-ifgen-build",
