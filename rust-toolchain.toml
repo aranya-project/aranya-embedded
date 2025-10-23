@@ -1,4 +1,0 @@
-[toolchain]
-channel = "esp"
-components = ["rustfmt", "clippy"]
-profile = "minimal"
