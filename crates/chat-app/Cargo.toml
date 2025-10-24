@@ -10,10 +10,10 @@ envelope-ffi = { path = "../envelope-ffi" }
 esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 
-aranya-runtime = { workspace = true }
+aranya-crypto = { workspace = true, features = ["memstore"] }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
-aranya-crypto = { workspace = true, features = ["memstore"] }
+aranya-runtime = { workspace = true }
 spideroak-base58 = { workspace = true }
 
 bytes = { workspace = true }
@@ -23,9 +23,14 @@ embassy-sync = { workspace = true }
 embassy-time = { workspace = true, features = ["generic-queue-8"] }
 embassy-usb = { workspace = true }
 esp-alloc = { workspace = true }
-esp-backtrace = { workspace = true, features = ["exception-handler", "panic-handler", "println", "custom-halt"] }
+esp-backtrace = { workspace = true, features = [
+    "exception-handler",
+    "panic-handler",
+    "println",
+    "custom-halt",
+] }
 esp-hal = { workspace = true }
-esp-hal-embassy  = { workspace = true }
+esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
 getrandom = { workspace = true, features = ["custom"] }
@@ -42,7 +47,9 @@ tracing = { workspace = true }
 
 # Enabled by "storage-internal" feature
 embedded-storage = { workspace = true, optional = true }
-esp-partition-table = { workspace = true, features = ["heapless"], optional = true }
+esp-partition-table = { workspace = true, features = [
+    "heapless",
+], optional = true }
 esp-storage = { workspace = true, optional = true }
 
 # Enabled by "storage-sd" feature
@@ -59,19 +66,19 @@ esp-wifi = { workspace = true, features = ["log", "esp-now"], optional = true }
 
 
 [build-dependencies]
-envelope-ffi = { path = "../envelope-ffi" }
-aranya-policy-lang = { workspace = true }
 aranya-policy-compiler = { workspace = true }
-aranya-policy-vm = { workspace = true }
 aranya-policy-ifgen-build = { workspace = true }
+aranya-policy-lang = { workspace = true }
+aranya-policy-vm = { workspace = true }
+envelope-ffi = { path = "../envelope-ffi" }
 rkyv = { workspace = true, features = ["alloc", "bytecheck"] }
 
 
 [features]
-default = ["storage-internal", "net-esp-now", "spideroak-demo-v2"]
+default = ["net-esp-now", "spideroak-demo-v2", "storage-internal"]
 
-adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
 adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
+adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
 spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]
 
 storage-internal = [
@@ -92,9 +99,9 @@ net-irda = [
 ]
 
 net-esp-now = [
+    "dep:crc",
     "dep:esp-wifi",
     "dep:raptorq",
-    "dep:crc",
 ]
 
 vendor-specific-usb = []

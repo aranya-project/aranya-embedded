@@ -8,7 +8,7 @@ publish = false
 # TODO(chip): switch this to the public repo path
 parameter-store = { path = "../parameter-store", features = ["std"] }
 
-aranya-crypto = { workspace = true }
+aranya-id = { workspace = true }
 
 anyhow = { workspace = true }
 clap = { workspace = true }

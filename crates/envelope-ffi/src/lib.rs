@@ -5,7 +5,7 @@ extern crate alloc;
 use alloc::vec::Vec;
 use core::convert::Infallible;
 
-use aranya_crypto::{Id, DeviceId};
+use aranya_crypto::{BaseId, DeviceId};
 use aranya_policy_vm::{ffi::ffi, CommandContext, MachineError};
 
 /// An Envelope that does no crypto
@@ -46,19 +46,19 @@ impl NullEnvelope {
         let parent_id = ctx.head_id;
         let author_id = self.user;
 
-        let command_id: Id = {
+        let command_id: BaseId = {
             use aranya_crypto::dangerous::spideroak_crypto::{hash::Hash, rust::Sha256};
             let mut hasher = Sha256::new();
             hasher.update(parent_id.as_bytes());
             hasher.update(author_id.as_bytes());
             hasher.update(&payload);
-            hasher.digest().into_array().into()
+            BaseId::from_bytes(hasher.digest().into_array().into())
         };
 
         Ok(Envelope {
-            parent_id: parent_id.into(),
-            author_id: author_id.into(),
-            command_id: command_id.into(),
+            parent_id: parent_id.as_base(),
+            author_id: author_id.as_base(),
+            command_id,
             payload,
             // TODO(chip): use an actual signature
             signature: b"LOL".to_vec(),

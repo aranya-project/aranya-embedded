@@ -10,7 +10,7 @@ use core::fmt;
 
 use aranya_crypto::DeviceId;
 use aranya_policy_vm::Text;
-use aranya_runtime::{CommandId, VmEffect};
+use aranya_runtime::{CmdId, VmEffect};
 use embassy_futures::select::{select3, Either3};
 use embassy_time::Instant;
 use esp_println::println;
@@ -50,7 +50,7 @@ pub struct ChatMessage {
     /// This timestamp does not store an authoritative time value, just
     /// a relative one for query purposes.
     ts: Instant,
-    id: CommandId,
+    id: CmdId,
     author: DeviceId,
     msg: String,
 }
@@ -64,7 +64,7 @@ impl TryFrom<VmEffect> for ChatMessage {
         Ok(ChatMessage {
             ts: Instant::now(),
             id: value.command,
-            author: mr.author.into(),
+            author: DeviceId::from_base(mr.author),
             msg: mr.msg.to_string(),
         })
     }
@@ -174,7 +174,7 @@ impl Application {
                                 .await;
                             SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }
-                        SerialCommand::SetAmbientColor(color) => {
+                        SerialCommand::SetAmbientColor(_color) => {
                             // TODO: send the action
                             SERIAL_OUT_CHANNEL.send(SerialResponse::Sent).await;
                         }

@@ -3,7 +3,6 @@
 use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::cell::RefCell;
 
-use aranya_crypto::Id;
 use aranya_runtime::{
     linear::LinearStorageProvider, storage::linear::io, GraphId, Location,
     StorageError as AranyaStorageError,
@@ -19,7 +18,7 @@ use super::StorageError;
 #[derive(Clone, PartialEq, rkyv::Serialize, rkyv::Deserialize, rkyv::Archive)]
 struct EspStorageHeader {
     epoch: u32,
-    graph_id: Option<Id>,
+    graph_id: Option<GraphId>,
     head: Option<(u32, u32)>,
     stored_bytes: usize,
 }
@@ -459,11 +458,7 @@ where
     ) -> Result<impl Iterator<Item = Result<GraphId, AranyaStorageError>>, AranyaStorageError> {
         let header = fetch_header(&self.storage, self.base)
             .map_err(log_error(AranyaStorageError::NoSuchStorage))?;
-        if let Some(graph_id) = header.graph_id {
-            Ok(alloc::vec![Ok(graph_id.into())].into_iter())
-        } else {
-            Ok(alloc::vec![].into_iter())
-        }
+        Ok(header.graph_id.into_iter().map(Ok))
     }
 
     fn remove(&mut self, _id: GraphId) -> Result<(), AranyaStorageError> {

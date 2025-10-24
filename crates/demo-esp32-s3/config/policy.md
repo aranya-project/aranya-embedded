@@ -14,6 +14,10 @@ action create_team(nonce bytes) {
 effect TeamCreated {}
 
 command Init {
+    attributes {
+        init: true,
+    }
+
     fields {
         nonce bytes,
     }
@@ -43,6 +47,10 @@ effect LedColorChanged {
 }
 
 command SetLedColor {
+    attributes {
+        priority: 0,
+    }
+
     fields {
         r int,
         g int,

@@ -16,7 +16,7 @@ mod util;
 mod watchdog;
 
 use aranya::daemon::Daemon;
-use aranya_crypto::{DeviceId, Rng};
+use aranya_crypto::{id::IdExt, DeviceId, Rng};
 use embassy_executor::Spawner;
 #[cfg(feature = "net-esp-now")]
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::Mutex};
@@ -335,7 +335,7 @@ async fn led_task(mut neopixel: Neopixel<'static>) {
                     counter = 10;
                 }
                 NeopixelMessage::Rainbow => {
-                    for i in 0..3 {
+                    for _i in 0..3 {
                         for hue in (0..360).step_by(6) {
                             let (red, green, blue) = rainbow_at(hue);
                             neopixel.set_color(red, green, blue).ok();

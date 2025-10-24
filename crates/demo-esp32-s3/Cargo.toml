@@ -10,10 +10,11 @@ envelope-ffi = { path = "../envelope-ffi" }
 esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 
-aranya-runtime = { workspace = true }
+aranya-crypto = { workspace = true, features = ["memstore"] }
+aranya-id = { workspace = true }
 aranya-policy-ifgen = { workspace = true }
 aranya-policy-vm = { workspace = true }
-aranya-crypto = { workspace = true, features = ["memstore"] }
+aranya-runtime = { workspace = true }
 
 embassy-executor = { workspace = true, features = ["nightly"] }
 embassy-futures = { workspace = true }
@@ -21,9 +22,14 @@ embassy-sync = { workspace = true }
 embassy-time = { workspace = true, features = ["generic-queue-8"] }
 embedded-io-async = { workspace = true }
 esp-alloc = { workspace = true }
-esp-backtrace = { workspace = true, features = ["exception-handler", "panic-handler", "println", "custom-halt"] }
+esp-backtrace = { workspace = true, features = [
+    "exception-handler",
+    "panic-handler",
+    "println",
+    "custom-halt",
+] }
 esp-hal = { workspace = true }
-esp-hal-embassy  = { workspace = true }
+esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
 getrandom = { workspace = true, features = ["custom"] }
@@ -38,12 +44,24 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 
 # Dependencies enabled for "wifi"
-embassy-net = { workspace = true, features = ["tcp", "udp", "dhcpv4", "medium-ethernet"], optional = true }
-esp-wifi = { workspace = true, features = ["utils", "wifi", "log", "esp-now"], optional = true }
+embassy-net = { workspace = true, features = [
+    "tcp",
+    "udp",
+    "dhcpv4",
+    "medium-ethernet",
+], optional = true }
+esp-wifi = { workspace = true, features = [
+    "utils",
+    "wifi",
+    "log",
+    "esp-now",
+], optional = true }
 
 # Enabled by "storage-internal" feature
 embedded-storage = { workspace = true, optional = true }
-esp-partition-table = { workspace = true, features = ["heapless"], optional = true }
+esp-partition-table = { workspace = true, features = [
+    "heapless",
+], optional = true }
 esp-storage = { workspace = true, features = [], optional = true }
 
 # Enabled by "storage-sd" feature
@@ -59,10 +77,10 @@ raptorq = { workspace = true, optional = true }
 [build-dependencies]
 envelope-ffi = { path = "../envelope-ffi" }
 
-aranya-policy-lang = { workspace = true }
 aranya-policy-compiler = { workspace = true }
-aranya-policy-vm = { workspace = true }
 aranya-policy-ifgen-build = { workspace = true }
+aranya-policy-lang = { workspace = true }
+aranya-policy-vm = { workspace = true }
 
 rkyv = { workspace = true, features = ["alloc", "bytecheck"] }
 ron = { workspace = true }
@@ -70,10 +88,10 @@ serde = { workspace = true, features = ["derive"] }
 
 
 [features]
-default = ["storage-internal", "net-esp-now", "spideroak-demo-v2"]
+default = ["net-esp-now", "spideroak-demo-v2", "storage-internal"]
 
-adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
 adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
+adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
 spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]
 
 storage-internal = [
@@ -88,8 +106,8 @@ storage-sd = [
 ]
 
 net-wifi = [
-    "dep:esp-wifi",
     "dep:embassy-net",
+    "dep:esp-wifi",
 ]
 
 net-irda = [
@@ -99,8 +117,8 @@ net-irda = [
 ]
 
 net-esp-now = [
-    "dep:esp-wifi",
-    "dep:embassy-net",
-    "dep:raptorq",
     "dep:crc",
+    "dep:embassy-net",
+    "dep:esp-wifi",
+    "dep:raptorq",
 ]
