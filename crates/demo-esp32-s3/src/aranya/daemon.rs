@@ -16,7 +16,7 @@ use aranya_runtime::{
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
-use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
+use super::{engine::EmbeddedPolicyStore, error::*, sink::DebugSink};
 use crate::storage::imp::*;
 
 // Use short names so we can more easily add generics.
@@ -26,15 +26,15 @@ pub(crate) type CE = DefaultEngine;
 pub(crate) type CS = DefaultCipherSuite;
 /// KS = KeyStore
 pub(crate) type KS = MemStore;
-/// PE = Policy Engine
-pub(crate) type PE = EmbeddedEngine<CE>;
+/// PS = Policy Store
+pub(crate) type PS = EmbeddedPolicyStore<CE>;
 /// SP = Storage Provider
 #[cfg(feature = "storage-sd")]
 pub(crate) type SP = LinearStorageProvider<GraphManager>;
 #[cfg(feature = "storage-internal")]
 pub(crate) type SP = LinearStorageProvider<EspPartitionIoManager<FlashStorage>>;
 /// Aranya Client
-pub(crate) type Client = ClientState<PE, SP>;
+pub(crate) type Client = ClientState<PS, SP>;
 
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
@@ -58,7 +58,7 @@ impl Daemon {
         };
 
         log::info!("Loading Policy");
-        let policy = EmbeddedEngine::new(crypto_engine)?;
+        let policy = EmbeddedPolicyStore::new(crypto_engine)?;
         log::info!("Creating an Aranya client");
         let aranya = Arc::new(Mutex::new(ClientState::new(policy, storage_provider)));
 
@@ -108,7 +108,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
     pub async fn add_commands(
         &self,
         cmds: &[impl Command + core::fmt::Debug],
-        trx: &mut Option<Transaction<SP, PE>>,
+        trx: &mut Option<Transaction<SP, PS>>,
         peer_cache: &mut PeerCache,
     ) -> Result<()> {
         let mut client = self.get_client().await;
@@ -137,7 +137,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
         Ok(())
     }
 
-    pub async fn commit(&self, mut trx: Transaction<SP, PE>) -> Result<()> {
+    pub async fn commit(&self, mut trx: Transaction<SP, PS>) -> Result<()> {
         let mut client = self.get_client().await;
         let mut sink = self.sink.lock().await;
         client.commit(&mut trx, sink.deref_mut())?;

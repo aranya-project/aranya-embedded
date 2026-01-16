@@ -16,7 +16,7 @@ use parameter_store::MAX_PEERS;
 
 use crate::{
     aranya::{
-        daemon::{PE, SP},
+        daemon::{PS, SP},
         error::Result,
     },
     hardware::neopixel::NeopixelSink,
@@ -87,7 +87,7 @@ pub enum SyncResponse {
 /// Container for a SyncRequester and its starting timestamp
 struct SyncSession<A> {
     requester: SyncRequester<A>,
-    trx: Option<Transaction<SP, PE>>,
+    trx: Option<Transaction<SP, PS>>,
     last_seen: Instant,
 }
 

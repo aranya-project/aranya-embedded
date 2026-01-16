@@ -14,7 +14,7 @@ use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{with_timeout, Duration};
 use esp_println::println;
 
-use super::{engine::EmbeddedEngine, error::*, sink::DebugSink};
+use super::{engine::EmbeddedPolicyStore, error::*, sink::DebugSink};
 #[cfg(feature = "net-esp-now")]
 use crate::net::espnow::EspNowNetworkInterface;
 #[cfg(feature = "net-irda")]
@@ -33,15 +33,15 @@ pub(crate) type CE = DefaultEngine;
 pub(crate) type CS = DefaultCipherSuite;
 /// KS = KeyStore
 pub(crate) type KS = MemStore;
-/// PE = Policy Engine
-pub(crate) type PE = EmbeddedEngine<CE>;
+/// PS = Policy Store
+pub(crate) type PS = EmbeddedPolicyStore<CE>;
 /// SP = Storage Provider
 #[cfg(feature = "storage-sd")]
 pub(crate) type SP = LinearStorageProvider<GraphManager>;
 #[cfg(feature = "storage-internal")]
 pub(crate) type SP = LinearStorageProvider<EspPartitionIoManager<FlashStorage>>;
 /// Aranya Client
-pub(crate) type Client = ClientState<PE, SP>;
+pub(crate) type Client = ClientState<PS, SP>;
 
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
@@ -77,7 +77,7 @@ impl<'a> Daemon<'a> {
         };
 
         log::info!("Loading Policy");
-        let policy = EmbeddedEngine::new(crypto_engine)?;
+        let policy = EmbeddedPolicyStore::new(crypto_engine)?;
         log::info!("Creating an Aranya client");
         let aranya = ClientState::new(policy, storage_provider);
 
