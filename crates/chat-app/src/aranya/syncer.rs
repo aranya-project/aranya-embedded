@@ -13,7 +13,7 @@ use parameter_store::MAX_PEERS;
 
 use crate::{
     aranya::{
-        daemon::{Client, PE, SP},
+        daemon::{Client, PS, SP},
         error::Result,
         sink::PubSubSink,
     },
@@ -82,7 +82,7 @@ pub enum SyncResponse {
 /// Container for a SyncRequester and its starting timestamp
 struct SyncSession<A> {
     requester: SyncRequester<A>,
-    trx: Option<Transaction<SP, PE>>,
+    trx: Option<Transaction<SP, PS>>,
     last_seen: Instant,
     peer_addr: A,
 }
@@ -380,7 +380,7 @@ where
 
 async fn add_commands(
     cmds: &[impl Command + core::fmt::Debug],
-    trx: &mut Option<Transaction<SP, PE>>,
+    trx: &mut Option<Transaction<SP, PS>>,
     peer_cache: &mut PeerCache,
     sink: &mut PubSubSink<'_>,
     client: &mut Client,

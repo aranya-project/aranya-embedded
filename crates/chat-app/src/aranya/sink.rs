@@ -6,12 +6,12 @@ use crate::aranya::daemon::EFFECT_OUT_CHANNEL;
 
 /// Holds a collection of effect data.
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct VecSink<E> {
+pub struct VecSink<Eff> {
     /// Effects from executing a policy action.
-    pub(crate) effects: Vec<E>,
+    pub(crate) effects: Vec<Eff>,
 }
 
-impl<E> VecSink<E> {
+impl<Eff> VecSink<Eff> {
     /// Creates a new `VecSink`.
     pub const fn new() -> Self {
         Self {
@@ -20,18 +20,18 @@ impl<E> VecSink<E> {
     }
 
     /// Returns the collected effects.
-    pub fn collect<T>(self) -> Result<Vec<T>, <T as TryFrom<E>>::Error>
+    pub fn collect<T>(self) -> Result<Vec<T>, <T as TryFrom<Eff>>::Error>
     where
-        T: TryFrom<E>,
+        T: TryFrom<Eff>,
     {
         self.effects.into_iter().map(T::try_from).collect()
     }
 }
 
-impl<E> Sink<E> for VecSink<E> {
+impl<Eff> Sink<Eff> for VecSink<Eff> {
     fn begin(&mut self) {}
 
-    fn consume(&mut self, effect: E) {
+    fn consume(&mut self, effect: Eff) {
         self.effects.push(effect);
     }
 
