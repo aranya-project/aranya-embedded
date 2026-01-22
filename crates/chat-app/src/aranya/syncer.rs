@@ -81,7 +81,7 @@ pub enum SyncResponse {
 
 /// Container for a SyncRequester and its starting timestamp
 struct SyncSession<A> {
-    requester: SyncRequester<A>,
+    requester: SyncRequester,
     trx: Option<Transaction<SP, PS>>,
     last_seen: Instant,
     peer_addr: A,
@@ -130,14 +130,13 @@ where
     /// Aranya client sends a `SyncRequest` to peer. The `SyncResponse` is handled below in
     /// [`handle_message()`](Self::handle_message).
     async fn sync_peer(&mut self, peer_addr: N::Addr, client: &mut Client) -> Result<()> {
-        let server_addr = self.network.my_address();
         let mut send_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
 
         let (len, _) = {
             let requester = match &mut self.sync_session {
                 None => {
                     self.sync_session = Some(SyncSession {
-                        requester: SyncRequester::new(self.graph_id, &mut Rng, server_addr),
+                        requester: SyncRequester::new(self.graph_id, &mut Rng),
                         trx: None,
                         last_seen: Instant::now(),
                         peer_addr,
@@ -244,7 +243,7 @@ where
         request: SyncRequestMessage,
         client: &mut Client,
     ) -> Result<()> {
-        let mut responder = SyncResponder::new(from);
+        let mut responder = SyncResponder::new();
         responder.receive(request)?;
         let mut c = 0;
         while responder.ready() {
@@ -343,7 +342,7 @@ where
         );
         match sm.t {
             SyncMessageType::Request => {
-                let st: SyncType<<N as NetworkInterface>::Addr> = postcard::from_bytes(&sm.bytes)?;
+                let st: SyncType = postcard::from_bytes(&sm.bytes)?;
                 match st {
                     SyncType::Poll { request, .. } => {
                         self.sync_respond(from, request, client).await?
