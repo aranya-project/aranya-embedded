@@ -189,8 +189,8 @@ async fn main(spawner: Spawner) {
             mk_static!(EspNowManager<'static>, manager);
         let receiver = Mutex::<CriticalSectionRawMutex, _>::new(receiver);
         let sender = Mutex::<CriticalSectionRawMutex, _>::new(sender);
-        let tx_led = Output::new(peripherals.GPIO10, Level::Low);
-        let rx_led = Output::new(peripherals.GPIO11, Level::Low);
+        let tx_led = board_def.indicators.tx_led.map(|pin| Output::new(pin, Level::Low));
+        let rx_led = board_def.indicators.rx_led.map(|pin| Output::new(pin, Level::Low));
 
         let engine =
             net::espnow::start(sender, receiver, parameter_values.address, tx_led, rx_led).await;

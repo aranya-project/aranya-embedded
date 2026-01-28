@@ -44,6 +44,11 @@ pub struct IrPinDef {
     pub en: AnyPin,
 }
 
+pub struct IndicatorsPinDef {
+    pub tx_led: Option<AnyPin>,
+    pub rx_led: Option<AnyPin>,
+}
+
 pub struct BoardDef {
     pub button: AnyPin,
     pub accessory_power: Option<AnyPin>,
@@ -51,4 +56,5 @@ pub struct BoardDef {
     pub i2c: I2CPinDef,
     pub sd: Option<SdPinDef>,
     pub ir: Option<IrPinDef>,
+    pub indicators: IndicatorsPinDef,
 }

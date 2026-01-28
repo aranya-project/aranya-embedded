@@ -28,6 +28,10 @@ macro_rules! board_def {
                 rx: $peripherals.GPIO14.degrade(),
                 en: $peripherals.GPIO21.degrade(),
             }),
+            indicators: $crate::IndicatorsPinDef {
+                tx_led: Some($peripherals.GPIO10.degrade()),
+                rx_led: Some($peripherals.GPIO11.degrade()),
+            }
         }
     }};
 }
