@@ -141,7 +141,7 @@ impl<'a> Daemon<'a> {
                         #[cfg(feature = "net-esp-now")]
                         syncer_esp_now.boost_hello(ACTION_BOOST, true);
                         #[cfg(feature = "net-irda")]
-                        syncer_ir.boost_hello();
+                        syncer_ir.boost_hello(ACTION_BOOST, true);
                     }
                     Err(err) => println!("Error from action: {err}"),
                 },

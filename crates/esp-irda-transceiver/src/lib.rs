@@ -8,13 +8,14 @@ mod ir;
 use alloc::sync::Arc;
 
 use embassy_sync::blocking_mutex::CriticalSectionMutex;
+pub use esp_hal::uart::Error as UartError;
 use esp_hal::{
     gpio::{
         interconnect::{PeripheralInput, PeripheralOutput},
         Level, Output, OutputPin,
     },
     peripheral::{Peripheral, PeripheralRef},
-    uart::{self, AnyUart, Error as UartError, Instance, Uart, UartRx, UartTx},
+    uart::{self, AnyUart, Instance, Uart, UartRx, UartTx},
     Async,
 };
 
