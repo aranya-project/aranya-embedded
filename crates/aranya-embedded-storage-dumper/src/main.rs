@@ -99,7 +99,7 @@ fn make_dot(graph: BTreeMap<u32, SegmentRepr>, p: &Path) -> anyhow::Result<()> {
     writeln!(f, "digraph G {{")?;
     writeln!(f, "    rankdir=LR")?;
     for (offset, segment) in graph {
-        let mut links = vec![];
+        // let mut links = vec![];
         writeln!(f, "    subgraph cluster_segment_{offset} {{")?;
         writeln!(f, "        label=\"Segment {offset}\";")?;
         writeln!(f, "        shape=rectangle;")?;
@@ -111,26 +111,30 @@ fn make_dot(graph: BTreeMap<u32, SegmentRepr>, p: &Path) -> anyhow::Result<()> {
                 "        command_{} [label=\"{}",
                 command_data.id, short_id
             )?;
-            let command: VmProtocolData = postcard::from_bytes(&command_data.data)?;
-            match command {
-                VmProtocolData::Init { kind, .. } => {
-                    writeln!(f, "\\n({kind})\", style=filled, color=lightblue];")?
-                }
-                VmProtocolData::Basic { parent, kind, .. } => {
-                    writeln!(f, "\\n({kind})\"];")?;
-                    links.push((command_data.id, parent.id));
-                }
-                VmProtocolData::Merge { left, right } => {
-                    writeln!(f, "\", style=filled, color=lightgreen];")?;
-                    links.push((command_data.id, left.id));
-                    links.push((command_data.id, right.id));
-                }
-            }
+            let _command: VmProtocolData = postcard::from_bytes(&command_data.data)?;
+            // TODO: Update to latest format.
+            // Tricky since parent ID of first command is only known by looking at previous segments.
+            // Recommend switching command names to use location instead of ID.
+
+            // match command {
+            //     VmProtocolData::Init { kind, .. } => {
+            //         writeln!(f, "\\n({kind})\", style=filled, color=lightblue];")?
+            //     }
+            //     VmProtocolData::Basic { parent, kind, .. } => {
+            //         writeln!(f, "\\n({kind})\"];")?;
+            //         links.push((command_data.id, parent.id));
+            //     }
+            //     VmProtocolData::Merge { left, right } => {
+            //         writeln!(f, "\", style=filled, color=lightgreen];")?;
+            //         links.push((command_data.id, left.id));
+            //         links.push((command_data.id, right.id));
+            //     }
+            // }
         }
         writeln!(f, "    }}")?;
-        for (from, to) in links {
-            writeln!(f, "    command_{from} -> command_{to}")?;
-        }
+        // for (from, to) in links {
+        //     writeln!(f, "    command_{from} -> command_{to}")?;
+        // }
     }
     writeln!(f, "}}")?;
 
