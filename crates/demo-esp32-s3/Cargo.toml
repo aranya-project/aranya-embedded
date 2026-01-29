@@ -31,6 +31,7 @@ esp-backtrace = { workspace = true, features = [
 esp-hal = { workspace = true }
 esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
+esp-storage = { workspace = true }
 fugit = { workspace = true }
 getrandom = { workspace = true, features = ["custom"] }
 heapless = { workspace = true }
@@ -62,7 +63,6 @@ embedded-storage = { workspace = true, optional = true }
 esp-partition-table = { workspace = true, features = [
     "heapless",
 ], optional = true }
-esp-storage = { workspace = true, features = [], optional = true }
 
 # Enabled by "storage-sd" feature
 embedded-hal-bus = { workspace = true, optional = true }
@@ -97,14 +97,15 @@ spideroak-demo-v2 = ["board-defs/spideroak-demo-v2"]
 storage-internal = [
     "dep:embedded-storage",
     "dep:esp-partition-table",
-    "dep:esp-storage",
 ]
 
+# NB: not functional
 storage-sd = [
     "dep:embedded-hal-bus",
     "dep:embedded-sdmmc",
 ]
 
+# NB: not functional
 net-wifi = [
     "dep:embassy-net",
     "dep:esp-wifi",

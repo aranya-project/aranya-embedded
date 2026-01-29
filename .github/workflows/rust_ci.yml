@@ -4,37 +4,90 @@ on:
   push:
     paths-ignore:
       - "**/README.md"
+    branches: ["main"]
   pull_request:
+    types: [opened, synchronize, reopened]
+  merge_group:
+    types: [checks_requested]
   workflow_dispatch:
+
+permissions:
+  contents: read
 
 env:
   CARGO_TERM_COLOR: always
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 
 jobs:
-  rust-checks:
-    name: Rust Checks
+  check-standard-crates:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        action:
-          - command: build
-            args: --release
-          - command: fmt
-            args: --all -- --check --color always
-          - command: clippy
-            args: --all-features --workspace -- -D warnings
+        crate:
+          - aranya-embedded-config
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Rust
-        uses: esp-rs/xtensa-toolchain@v1.5
+
+      - name: Check default features
+        working-directory: "crates/${{ matrix.crate }}"
+        run: cargo check
+
+
+  check-board-defs:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install espup
+        uses: aranya-project/install-action@main
         with:
-          default: true
-          buildtargets: esp32
-          ldproxy: false
-      - name: Enable caching
-        uses: Swatinem/rust-cache@v2
-      - name: Run command
-        run: cargo ${{ matrix.action.command }} ${{ matrix.action.args }}
+          tool: espup@0.16.0
+
+      - name: Install esp toolchain
+        run: espup install
+
+      - name: Check each board type
+        working-directory: "crates/board-defs"
+        run: |
+          cargo check --features spideroak-demo-v2
+          cargo check --features adafruit-feather-s3
+          cargo check --features adafruit-qtpy-s3
+
+
+  check-embedded-crates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - chat-app
+          - demo-esp32-s3
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install espup
+        uses: aranya-project/install-action@main
+        with:
+          tool: espup@0.16.0
+
+      - name: Install esp toolchain
+        run: espup install
+
+      - name: Check default features
+        working-directory: "crates/${{ matrix.crate }}"
+        run: |
+          cargo check
+
+      - name: Check IRDA
+        working-directory: "crates/${{ matrix.crate }}"
+        run: |
+          cargo check --no-default-features --features storage-internal,spideroak-demo-v2 --features net-irda
