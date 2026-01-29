@@ -85,8 +85,8 @@ pub enum SyncResponse {
 }
 
 /// Container for a SyncRequester and its starting timestamp
-struct SyncSession<A> {
-    requester: SyncRequester<A>,
+struct SyncSession {
+    requester: SyncRequester,
     trx: Option<Transaction<SP, PS>>,
     last_seen: Instant,
 }
@@ -100,7 +100,7 @@ where
     imp: Imp<NeopixelSink>,
     network: N,
     peers: heapless::Vec<N::Addr, MAX_PEERS>,
-    sessions: Mutex<BTreeMap<N::Addr, SyncSession<N::Addr>>>,
+    sessions: Mutex<BTreeMap<N::Addr, SyncSession>>,
     peer_caches: Mutex<BTreeMap<N::Addr, PeerCache>>,
 }
 
@@ -145,7 +145,6 @@ where
                             requester: SyncRequester::new(
                                 self.imp.graph_id(),
                                 &mut Rng,
-                                server_addr,
                             ),
                             trx: None,
                             last_seen: Instant::now(),
@@ -224,7 +223,7 @@ where
     }
 
     async fn sync_respond(&self, from: N::Addr, request: SyncRequestMessage) -> Result<()> {
-        let mut responder = SyncResponder::new(from);
+        let mut responder = SyncResponder::new();
         responder.receive(request)?;
         log::info!("sync_respond: getting clinet");
         let mut aranya = self.imp.get_client().await;
@@ -295,7 +294,7 @@ where
         );
         match sm.t {
             SyncMessageType::Request => {
-                let st: SyncType<<N as NetworkInterface>::Addr> = postcard::from_bytes(&sm.bytes)?;
+                let st: SyncType = postcard::from_bytes(&sm.bytes)?;
                 match st {
                     SyncType::Poll { request, .. } => self.sync_respond(from, request).await?,
                     _ => unimplemented!(),

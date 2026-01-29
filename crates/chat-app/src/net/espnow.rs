@@ -157,7 +157,8 @@ pub(crate) struct EspNowNetworkEngine<'a> {
     send_channel: Channel<EspNowPacket>,
     receive_channel: Channel<EspNowPacket>,
     last_rx: AtomicU32,
-    leds: Mutex<(Output<'a>, Output<'a>)>, // tx, rx
+    tx_led: Option<Mutex<Output<'a>>>,
+    rx_led: Option<Mutex<Output<'a>>>,
 }
 
 impl<'o> EspNowNetworkEngine<'o> {
@@ -166,8 +167,8 @@ impl<'o> EspNowNetworkEngine<'o> {
         sender: Mutex<EspNowSender<'o>>,
         receiver: Mutex<EspNowReceiver<'o>>,
         my_address: u16,
-        tx_led: Output<'o>,
-        rx_led: Output<'o>,
+        tx_led: Option<Output<'o>>,
+        rx_led: Option<Output<'o>>,
     ) -> EspNowNetworkEngine<'o> {
         EspNowNetworkEngine {
             sender,
@@ -176,7 +177,8 @@ impl<'o> EspNowNetworkEngine<'o> {
             send_channel: Channel::new(),
             receive_channel: Channel::new(),
             last_rx: AtomicU32::new(0),
-            leds: Mutex::new((tx_led, rx_led)),
+            tx_led: tx_led.map(Mutex::new),
+            rx_led: rx_led.map(Mutex::new),
         }
     }
 
@@ -187,7 +189,9 @@ impl<'o> EspNowNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: EspNowPacket) -> Result<u16, EspNowError> {
-        self.leds.lock().await.0.set_high();
+        if let Some(tx_led) = &self.tx_led {
+            tx_led.lock().await.set_high();
+        }
 
         let mut output_buf: [MaybeUninit<u8>; ESP_NOW_PACKET_SIZE] =
             [MaybeUninit::uninit(); ESP_NOW_PACKET_SIZE];
@@ -229,7 +233,9 @@ impl<'o> EspNowNetworkEngine<'o> {
     async fn recv_packet(&self) -> Result<EspNowPacket, EspNowError> {
         loop {
             let received = self.receiver.lock().await.receive_async().await;
-            self.leds.lock().await.1.set_high();
+            if let Some(rx_led) = &self.rx_led {
+                rx_led.lock().await.set_high();
+            }
             let receive_data = received.data();
             log::debug!("EspNow: reseave info {:?}", received.info);
 
@@ -307,11 +313,15 @@ impl<'o> EspNowNetworkEngine<'o> {
 
             match self.send_packet(packet).await {
                 Ok(crc) => {
-                    self.leds.lock().await.0.set_low();
+                    if let Some(tx_led) = &self.tx_led {
+                        tx_led.lock().await.set_low();
+                    }
                     Timer::after_millis(Self::random_delay(crc) as u64).await;
                 }
                 Err(e) => {
-                    self.leds.lock().await.0.set_low();
+                    if let Some(tx_led) = &self.tx_led {
+                        tx_led.lock().await.set_low();
+                    }
                     log::error!("EspNow: send error: {e}");
                     Timer::after_millis(SEND_RETRY_DELAY_MS).await;
                 }
@@ -327,7 +337,9 @@ impl<'o> EspNowNetworkEngine<'o> {
                     log::error!("EspNow: recv error: {e}");
                 }
             }
-            self.leds.lock().await.1.set_low();
+            if let Some(rx_led) = &self.rx_led {
+                rx_led.lock().await.set_low();
+            }
         }
     }
 }
@@ -435,8 +447,8 @@ pub(crate) async fn start(
     sender: Mutex<EspNowSender<'static>>,
     receiver: Mutex<EspNowReceiver<'static>>,
     my_address: u16,
-    tx_led: Output<'static>,
-    rx_led: Output<'static>,
+    tx_led: Option<Output<'static>>,
+    rx_led: Option<Output<'static>>,
 ) -> &'static EspNowNetworkEngine<'static> {
     mk_static!(
         EspNowNetworkEngine,

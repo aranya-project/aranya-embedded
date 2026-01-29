@@ -18,6 +18,10 @@ macro_rules! board_def {
             },
             sd: None,
             ir: None,
+            indicators: $crate::IndicatorsPinDef {
+                tx_led: None,
+                rx_led: None,
+            }
         }
     }};
 }
