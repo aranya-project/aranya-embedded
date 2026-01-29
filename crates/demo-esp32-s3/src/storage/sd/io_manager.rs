@@ -539,16 +539,6 @@ impl linear::io::IoManager for GraphManager {
             head_file,
         )))
     }
-
-    fn list(
-        &mut self,
-    ) -> Result<impl Iterator<Item = Result<GraphId, aranya_runtime::StorageError>>, aranya_runtime::StorageError> {
-        unimplemented!() as Result::<core::iter::Empty<_>, _>
-    }
-
-    fn remove(&mut self, _id: GraphId) -> Result<(), aranya_runtime::StorageError> {
-        unimplemented!()
-    }
 }
 
 // Max character size limit is 8 before period and 3 after "https://github.com/rust-embedded-community/embedded-sdmmc-rs/blob/011726bf85edfd1315732746ccb1d8c5c7fec5b4/src/filesystem/filename.rs#L12"

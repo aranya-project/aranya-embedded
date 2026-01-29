@@ -86,6 +86,7 @@ storage-internal = [
     "dep:esp-partition-table",
 ]
 
+# NB: not functional
 storage-sd = [
     "dep:embedded-hal-bus",
     "dep:embedded-sdmmc",

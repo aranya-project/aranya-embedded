@@ -23,15 +23,45 @@ concurrency:
 
 
 jobs:
-  check-general-crates:
+  check-standard-crates:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        crate:
+          - aranya-embedded-config
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check default features
+        working-directory: "crates/${{ matrix.crate }}"
+        run: cargo check
+
+
+  check-board-defs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Cargo check
-        run: cargo check -p aranya-embedded-config -p aranya-embedded-storage-dumper -p envelope-ffi -p parameter-store
 
-  check-leaf-crates:
+      - name: Install espup
+        uses: aranya-project/install-action@main
+        with:
+          tool: espup@0.16.0
+
+      - name: Install esp toolchain
+        run: espup install
+
+      - name: Check each board type
+        working-directory: "crates/board-defs"
+        run: |
+          cargo check --features spideroak-demo-v2
+          cargo check --features adafruit-feather-s3
+          cargo check --features adafruit-qtpy-s3
+
+
+  check-embedded-crates:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -57,16 +87,7 @@ jobs:
         run: |
           cargo check
 
-      - name: Check boards
+      - name: Check IRDA
         working-directory: "crates/${{ matrix.crate }}"
         run: |
-          cargo check --no-default-features --features net-esp-now,storage-internal --features adafruit-feather-s3
-          cargo check --no-default-features --features net-esp-now,storage-internal --features adafruit-qtpy-s3
-
-      - name: Check storage and net combos
-        working-directory: "crates/${{ matrix.crate }}"
-        run: |
-          cargo check --no-default-features --features spideroak-demo-v2 --features storage-internal,net-irda
-          cargo check --no-default-features --features spideroak-demo-v2 --features storage-sd,net-irda
-          # TODO: Fix duplicate timer usage
-          # cargo check --no-default-features --features spideroak-demo-v2 --features storage-sd,net-esp-now
+          cargo check --no-default-features --features storage-internal,spideroak-demo-v2 --features net-irda
