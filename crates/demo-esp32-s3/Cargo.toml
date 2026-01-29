@@ -105,6 +105,7 @@ storage-sd = [
     "dep:embedded-sdmmc",
 ]
 
+# NB: not functional
 net-wifi = [
     "dep:embassy-net",
     "dep:esp-wifi",
