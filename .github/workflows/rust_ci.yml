@@ -44,11 +44,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install espup
+        uses: aranya-project/install-action@main
+        with:
+          tool: espup@0.16.0
+
       - name: Install esp toolchain
-        run: |
-            cargo install espup --locked
-            espup install
-            . /home/runner/export-esp.sh
+        run: espup install
 
       - name: Check default features
         working-directory: "crates/${{ matrix.crate }}"
