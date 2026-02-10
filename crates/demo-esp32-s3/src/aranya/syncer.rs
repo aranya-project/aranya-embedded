@@ -9,7 +9,7 @@ use aranya_crypto::Rng;
 use aranya_runtime::{
     linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
     StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
-    Transaction, MAX_SYNC_MESSAGE_SIZE,
+    TraversalBuffers, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -102,6 +102,7 @@ where
     peers: heapless::Vec<N::Addr, MAX_PEERS>,
     sessions: Mutex<BTreeMap<N::Addr, SyncSession>>,
     peer_caches: Mutex<BTreeMap<N::Addr, PeerCache>>,
+    buffers: Mutex<TraversalBuffers>,
 }
 
 impl<N> SyncEngine<N>
@@ -120,6 +121,7 @@ where
             peers,
             sessions: Mutex::new(BTreeMap::new()),
             peer_caches: Mutex::new(BTreeMap::new()),
+            buffers: Mutex::new(TraversalBuffers::new()),
         }
     }
 }
@@ -168,8 +170,9 @@ where
             let mut client = self.imp.get_client().await;
             let mut peer_caches = self.peer_caches.lock().await;
             let peer_cache = peer_caches.entry(peer_addr).or_default();
+            let mut buffers = self.buffers.lock().await;
             log::info!("peer_cache for {peer_addr}: {peer_cache:?}");
-            requester.poll(&mut send_buf, client.provider(), peer_cache)?
+            requester.poll(&mut send_buf, client.provider(), peer_cache, &mut buffers)?
         };
         log::info!("sync_peer: sending Request len {len} to {peer_addr}");
         send_buf.truncate(len);
@@ -234,7 +237,8 @@ where
             let len = {
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
-                responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
+                let mut buffers = self.buffers.lock().await;
+                responder.poll(&mut msg_buf, aranya.provider(), peer_cache, &mut buffers)?
             };
             log::info!(
                 "sync_respond: responding to {from} with len {} loop {}",
@@ -263,8 +267,9 @@ where
             if !cmds.is_empty() {
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
+                let mut buffers = self.buffers.lock().await;
                 self.imp
-                    .add_commands(&cmds, &mut req_session.trx, peer_cache)
+                    .add_commands(&cmds, &mut req_session.trx, peer_cache, &mut buffers.primary)
                     .await?;
             }
         } else {
@@ -314,7 +319,8 @@ where
                     let mut aranya = self.imp.get_client().await;
                     let provider = aranya.provider();
                     let storage = provider.get_storage(graph_id)?;
-                    storage.get_location(head)?.is_some()
+                    let mut buffers = self.buffers.lock().await;
+                    storage.get_location(head, &mut buffers.primary)?.is_some()
                 };
 
                 if !has_address {

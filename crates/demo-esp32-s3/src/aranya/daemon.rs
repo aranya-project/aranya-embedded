@@ -12,7 +12,7 @@ use aranya_crypto::{
 };
 use aranya_runtime::{
     linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
-    PeerCache, Sink, Storage, StorageProvider, Transaction, VmEffect,
+    PeerCache, Sink, Storage, StorageProvider, TraversalBufferPair, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -110,6 +110,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
         cmds: &[impl Command + core::fmt::Debug],
         trx: &mut Option<Transaction<SP, PS>>,
         peer_cache: &mut PeerCache,
+        buffers: &mut TraversalBufferPair,
     ) -> Result<()> {
         let mut client = self.get_client().await;
         let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
@@ -125,11 +126,11 @@ impl<S: Sink<VmEffect>> Imp<S> {
             .map_err(|e| ClientError::StorageError(e))?;
         for addr in addresses {
             if let Some(cmd_loc) = storage
-                .get_location(addr)
+                .get_location(addr, buffers)
                 .map_err(|e| ClientError::StorageError(e))?
             {
                 peer_cache
-                    .add_command(storage, addr, cmd_loc)
+                    .add_command(storage, addr, cmd_loc, buffers)
                     .map_err(|e| ClientError::StorageError(e))?;
             }
         }
