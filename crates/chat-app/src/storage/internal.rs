@@ -4,7 +4,7 @@ use alloc::{boxed::Box, sync::Arc, vec::Vec};
 use core::cell::RefCell;
 
 use aranya_runtime::{
-    linear::LinearStorageProvider, storage::linear::io, GraphId, Location,
+    linear::LinearStorageProvider, storage::linear::io, GraphId, Location, MaxCut, SegmentIndex,
     StorageError as AranyaStorageError,
 };
 use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
@@ -288,7 +288,7 @@ where
     fn head(&self) -> Result<Location, AranyaStorageError> {
         self.header_cache
             .head
-            .map(|(a, b)| Ok(Location::new(a as usize, b as usize)))
+            .map(|(a, b)| Ok(Location::new(SegmentIndex(a as usize), MaxCut(b as usize))))
             .ok_or_else(|| {
                 log::error!("no head found");
                 AranyaStorageError::NoSuchStorage
@@ -346,13 +346,15 @@ where
         self.update_header(|header| {
             let segment = head
                 .segment
+                .0
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
-            let command = head
-                .command
+            let max_cut = head
+                .max_cut
+                .0
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
-            header.head = Some((segment, command));
+            header.head = Some((segment, max_cut));
             Ok(())
         })
         .map_err(log_error(AranyaStorageError::IoError))?;
