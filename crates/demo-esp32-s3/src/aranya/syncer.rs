@@ -144,7 +144,7 @@ where
                         .insert(SyncSession {
                             requester: SyncRequester::new(
                                 self.imp.graph_id(),
-                                &mut Rng,
+                                Rng,
                             ),
                             trx: None,
                             last_seen: Instant::now(),

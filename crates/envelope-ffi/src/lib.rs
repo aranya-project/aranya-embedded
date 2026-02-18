@@ -36,7 +36,7 @@ impl NullEnvelope {
     fn seal<CE>(
         &self,
         ctx: &CommandContext,
-        _eng: &mut CE,
+        _eng: &CE,
         payload: Vec<u8>,
     ) -> Result<Envelope, MachineError> {
         let CommandContext::Seal(ctx) = ctx else {
@@ -69,7 +69,7 @@ impl NullEnvelope {
     fn open<CE>(
         &self,
         _ctx: &CommandContext,
-        _eng: &mut CE,
+        _eng: &CE,
         envelope_input: Envelope,
     ) -> Result<Vec<u8>, Infallible> {
         Ok(envelope_input.payload)

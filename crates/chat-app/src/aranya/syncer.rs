@@ -136,7 +136,7 @@ where
             let requester = match &mut self.sync_session {
                 None => {
                     self.sync_session = Some(SyncSession {
-                        requester: SyncRequester::new(self.graph_id, &mut Rng),
+                        requester: SyncRequester::new(self.graph_id, Rng),
                         trx: None,
                         last_seen: Instant::now(),
                         peer_addr,

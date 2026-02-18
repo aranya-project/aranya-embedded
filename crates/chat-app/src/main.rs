@@ -157,7 +157,7 @@ async fn main(spawner: Spawner) {
 
     let device_id = match parameter_values.device_id {
         None => {
-            let device_id = DeviceId::random(&mut Rng::default());
+            let device_id = DeviceId::random(Rng);
             parameters
                 .update(|p| p.device_id = Some(device_id.into()))
                 .expect("could not update device ID");
