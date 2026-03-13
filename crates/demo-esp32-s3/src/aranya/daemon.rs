@@ -12,7 +12,8 @@ use aranya_crypto::{
 };
 use aranya_runtime::{
     linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
-    PeerCache, Sink, Storage, StorageProvider, Transaction, VmEffect,
+    PeerCache, Sink, Storage, StorageProvider, Transaction, TraversalBuffer, TraversalBuffers,
+    VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -110,12 +111,13 @@ impl<S: Sink<VmEffect>> Imp<S> {
         cmds: &[impl Command + core::fmt::Debug],
         trx: &mut Option<Transaction<SP, PS>>,
         peer_cache: &mut PeerCache,
+        buffer: &mut TraversalBuffer,
     ) -> Result<()> {
         let mut client = self.get_client().await;
         let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
         let mut sink = self.sink.lock().await;
         dump_commands(cmds);
-        client.add_commands(trx, sink.deref_mut(), cmds)?;
+        client.add_commands(trx, sink.deref_mut(), cmds, buffer)?;
 
         // Update peer cache
         let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
@@ -125,11 +127,11 @@ impl<S: Sink<VmEffect>> Imp<S> {
             .map_err(|e| ClientError::StorageError(e))?;
         for addr in addresses {
             if let Some(cmd_loc) = storage
-                .get_location(addr)
+                .get_location(addr, buffer)
                 .map_err(|e| ClientError::StorageError(e))?
             {
                 peer_cache
-                    .add_command(storage, addr, cmd_loc)
+                    .add_command(storage, addr, cmd_loc, buffer)
                     .map_err(|e| ClientError::StorageError(e))?;
             }
         }
@@ -137,10 +139,14 @@ impl<S: Sink<VmEffect>> Imp<S> {
         Ok(())
     }
 
-    pub async fn commit(&self, mut trx: Transaction<SP, PS>) -> Result<()> {
+    pub async fn commit(
+        &self,
+        mut trx: Transaction<SP, PS>,
+        buffer: &mut TraversalBuffer,
+    ) -> Result<()> {
         let mut client = self.get_client().await;
         let mut sink = self.sink.lock().await;
-        client.commit(&mut trx, sink.deref_mut())?;
+        client.commit(trx, sink.deref_mut(), buffer)?;
         Ok(())
     }
 

@@ -9,7 +9,7 @@ use aranya_crypto::Rng;
 use aranya_runtime::{
     linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
     StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
-    Transaction, MAX_SYNC_MESSAGE_SIZE,
+    Transaction, TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -132,7 +132,7 @@ where
     /// Syncs with the peer.
     /// Aranya client sends a `SyncRequest` to peer. The `SyncResponse` is handled below in
     /// [`handle_message()`](Self::handle_message).
-    async fn sync_peer(&self, peer_addr: N::Addr) -> Result<()> {
+    async fn sync_peer(&self, peer_addr: N::Addr, buffer: &mut TraversalBuffer) -> Result<()> {
         let server_addr = self.network.my_address();
         let mut send_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
 
@@ -142,10 +142,7 @@ where
                 btree_map::Entry::Vacant(entry) => {
                     &mut entry
                         .insert(SyncSession {
-                            requester: SyncRequester::new(
-                                self.imp.graph_id(),
-                                Rng,
-                            ),
+                            requester: SyncRequester::new(self.imp.graph_id(), Rng),
                             trx: None,
                             last_seen: Instant::now(),
                         })
@@ -158,7 +155,7 @@ where
                         // sync is stalled. Commit any progress so far and remove this entry
                         let ses = entry.remove();
                         if let Some(trx) = ses.trx {
-                            self.imp.commit(trx).await?;
+                            self.imp.commit(trx, buffer).await?;
                         }
                     }
                     // Otherwise, we wait for this sync to proceed
@@ -169,7 +166,7 @@ where
             let mut peer_caches = self.peer_caches.lock().await;
             let peer_cache = peer_caches.entry(peer_addr).or_default();
             log::info!("peer_cache for {peer_addr}: {peer_cache:?}");
-            requester.poll(&mut send_buf, client.provider(), peer_cache)?
+            requester.poll(&mut send_buf, client.provider(), peer_cache, buffer)?
         };
         log::info!("sync_peer: sending Request len {len} to {peer_addr}");
         send_buf.truncate(len);
@@ -222,7 +219,12 @@ where
         Ok(())
     }
 
-    async fn sync_respond(&self, from: N::Addr, request: SyncRequestMessage) -> Result<()> {
+    async fn sync_respond(
+        &self,
+        from: N::Addr,
+        request: SyncRequestMessage,
+        buffers: &mut TraversalBuffers,
+    ) -> Result<()> {
         let mut responder = SyncResponder::new();
         responder.receive(request)?;
         log::info!("sync_respond: getting clinet");
@@ -234,7 +236,7 @@ where
             let len = {
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
-                responder.poll(&mut msg_buf, aranya.provider(), peer_cache)?
+                responder.poll(&mut msg_buf, aranya.provider(), peer_cache, buffers)?
             };
             log::info!(
                 "sync_respond: responding to {from} with len {} loop {}",
@@ -252,7 +254,12 @@ where
         Ok(())
     }
 
-    async fn process_response(&self, from: N::Addr, bytes: &[u8]) -> Result<()> {
+    async fn process_response(
+        &self,
+        from: N::Addr,
+        bytes: &[u8],
+        buffer: &mut TraversalBuffer,
+    ) -> Result<()> {
         let mut sessions = self.sessions.lock().await;
         let req_session = &mut sessions.get_mut(&from).ok_or(SyncError::SessionMismatch)?;
         req_session.last_seen = Instant::now();
@@ -264,7 +271,7 @@ where
                 let mut peer_caches = self.peer_caches.lock().await;
                 let peer_cache = peer_caches.entry(from).or_default();
                 self.imp
-                    .add_commands(&cmds, &mut req_session.trx, peer_cache)
+                    .add_commands(&cmds, &mut req_session.trx, peer_cache, buffer)
                     .await?;
             }
         } else {
@@ -274,7 +281,7 @@ where
             let req_session = sessions.remove(&from).unwrap();
             if let Some(trx) = req_session.trx {
                 log::info!("process_response: commiting");
-                self.imp.commit(trx).await?;
+                self.imp.commit(trx, buffer).await?;
                 log::info!("process_response: done commiting");
             } else {
                 log::info!("process_response: No transaction!!")
@@ -284,7 +291,7 @@ where
         Ok(())
     }
 
-    async fn handle_message(&self) -> Result<()> {
+    async fn handle_message(&self, buffers: &mut TraversalBuffers) -> Result<()> {
         let msg = self.network.recv_message().await?;
         let (from, sm) = SyncMessage::from_message(msg)?;
         log::info!(
@@ -296,12 +303,12 @@ where
             SyncMessageType::Request => {
                 let st: SyncType = postcard::from_bytes(&sm.bytes)?;
                 match st {
-                    SyncType::Poll { request, .. } => self.sync_respond(from, request).await?,
+                    SyncType::Poll { request, .. } => self.sync_respond(from, request, buffers).await?,
                     _ => unimplemented!(),
                 };
             }
             SyncMessageType::Response => {
-                self.process_response(from, &sm.bytes).await?;
+                self.process_response(from, &sm.bytes, &mut buffers.primary).await?;
             }
             SyncMessageType::Hello => {
                 let hello: HelloMessage<N> = postcard::from_bytes(&sm.bytes)?;
@@ -314,12 +321,12 @@ where
                     let mut aranya = self.imp.get_client().await;
                     let provider = aranya.provider();
                     let storage = provider.get_storage(graph_id)?;
-                    storage.get_location(head)?.is_some()
+                    storage.get_location(head, &mut buffers.primary)?.is_some()
                 };
 
                 if !has_address {
                     let address = hello.address;
-                    self.sync_peer(address).await?;
+                    self.sync_peer(address, &mut buffers.primary).await?;
                 }
             }
         }
@@ -328,8 +335,9 @@ where
 
     /// Wait forever for requests and handle them. This does not return.
     async fn serve(&self) -> ! {
+        let mut buffers = TraversalBuffers::new();
         loop {
-            match self.handle_message().await {
+            match self.handle_message(&mut buffers).await {
                 Ok(_) => (),
                 Err(e) => {
                     log::error!("sync serve: {e}");

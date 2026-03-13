@@ -5,7 +5,7 @@ use aranya_crypto::Rng;
 use aranya_runtime::{
     Address, ClientError, Command, GraphId, PeerCache, Segment, Storage, StorageProvider,
     SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction,
-    MAX_SYNC_MESSAGE_SIZE,
+    TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -100,6 +100,7 @@ where
     sink: PubSubSink<'a>,
     hello_boost: u8,
     last_hello: Instant,
+    buffers: TraversalBuffers,
 }
 
 impl<N> SyncEngine<'_, N>
@@ -117,6 +118,7 @@ where
             sink: PubSubSink::new(),
             hello_boost: 0,
             last_hello: Instant::from_ticks(0),
+            buffers: TraversalBuffers::new(),
         }
     }
 }
@@ -147,8 +149,8 @@ where
                     if Instant::now() - session.last_seen > SYNC_STALL_TIMEOUT {
                         log::info!("sync_peer: sync stalled for {peer_addr}");
                         // sync is stalled. Commit any progress so far and close the session
-                        if let Some(trx) = &mut session.trx {
-                            client.commit(trx, &mut self.sink)?;
+                        if let Some(trx) = session.trx.take() {
+                            client.commit(trx, &mut self.sink, &mut self.buffers.primary)?;
                         }
                         self.sync_session = None;
                         self.sync_queue.remove(&peer_addr);
@@ -159,7 +161,12 @@ where
             };
             let peer_cache = self.peer_caches.entry(peer_addr).or_default();
             log::info!("peer_cache for {peer_addr}: {peer_cache:?}");
-            requester.poll(&mut send_buf, client.provider(), peer_cache)?
+            requester.poll(
+                &mut send_buf,
+                client.provider(),
+                peer_cache,
+                &mut self.buffers.primary,
+            )?
         };
         log::info!("sync_peer: sending Request len {len} to {peer_addr}");
         send_buf.truncate(len);
@@ -250,7 +257,12 @@ where
             let mut msg_buf = vec![0u8; MAX_SYNC_MESSAGE_SIZE];
             let len = {
                 let peer_cache = self.peer_caches.entry(from).or_default();
-                responder.poll(&mut msg_buf, client.provider(), peer_cache)?
+                responder.poll(
+                    &mut msg_buf,
+                    client.provider(),
+                    peer_cache,
+                    &mut self.buffers,
+                )?
             };
             log::info!(
                 "sync_respond: responding to {from} with len {} loop {}",
@@ -302,6 +314,7 @@ where
                     &mut self.sink,
                     client,
                     self.graph_id,
+                    &mut self.buffers.primary,
                 )
                 .await?;
             }
@@ -310,9 +323,9 @@ where
             log::info!("process_response: sync ended with {from}");
             // SAFETY: we know the session exists because we've been using it
             let mut req_session = self.sync_session.take().unwrap();
-            if let Some(trx) = &mut req_session.trx {
+            if let Some(trx) = req_session.trx {
                 log::info!("process_response: commiting");
-                client.commit(trx, &mut self.sink)?;
+                client.commit(trx, &mut self.sink, &mut self.buffers.primary)?;
                 log::info!("process_response: done commiting");
             } else {
                 log::error!("process_response: No transaction!!")
@@ -361,7 +374,9 @@ where
                 let has_address = {
                     let provider = client.provider();
                     let storage = provider.get_storage(self.graph_id)?;
-                    storage.get_location(hello.head)?.is_some()
+                    storage
+                        .get_location(hello.head, &mut self.buffers.primary)?
+                        .is_some()
                 };
 
                 if has_address {
@@ -384,11 +399,12 @@ async fn add_commands(
     sink: &mut PubSubSink<'_>,
     client: &mut Client,
     graph_id: GraphId,
+    buffer: &mut TraversalBuffer,
 ) -> Result<()> {
     let trx = trx.get_or_insert_with(|| client.transaction(graph_id));
     dump_commands(cmds);
     for cmd in cmds.chunks(1) {
-        client.add_commands(trx, sink, cmd)?;
+        client.add_commands(trx, sink, cmd, buffer)?;
         yield_now().await;
     }
 
@@ -400,11 +416,11 @@ async fn add_commands(
         .map_err(|e| ClientError::StorageError(e))?;
     for addr in addresses {
         if let Some(cmd_loc) = storage
-            .get_location(addr)
+            .get_location(addr, buffer)
             .map_err(|e| ClientError::StorageError(e))?
         {
             peer_cache
-                .add_command(storage, addr, cmd_loc)
+                .add_command(storage, addr, cmd_loc, buffer)
                 .map_err(|e| ClientError::StorageError(e))?;
         }
     }
