@@ -2,7 +2,7 @@ use alloc::{boxed::Box, vec, vec::Vec};
 
 use aranya_crypto::{DeviceId, Engine};
 use aranya_policy_vm::{Machine, Module};
-use aranya_runtime::{PolicyError, FfiCallable, PolicyId, VmEffect, VmPolicy};
+use aranya_runtime::{FfiCallable, PolicyError, PolicyId, VmEffect, VmPolicy};
 use envelope_ffi::NullEnvelope;
 use rkyv::{rancor::Error as RancorError, util::AlignedVec};
 
