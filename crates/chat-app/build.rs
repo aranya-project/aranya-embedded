@@ -60,5 +60,5 @@ fn aranya_setup() {
 
     // Generate interface
     println!("cargo:rerun-if-changed=config/policy.md");
-    aranya_policy_ifgen_build::generate("config/policy.md", "src/aranya/policy.rs").unwrap();
+    aranya_policy_ifgen_build::generate("config/policy.md", "src/aranya/policy.rs", None).unwrap();
 }
