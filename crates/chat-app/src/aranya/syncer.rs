@@ -4,8 +4,8 @@ use core::task::Poll;
 use aranya_crypto::Rng;
 use aranya_runtime::{
     Address, ClientError, Command, GraphId, PeerCache, Segment, Storage, StorageProvider,
-    SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType, Transaction,
-    TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
+    SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction, TraversalBuffer,
+    TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -247,7 +247,7 @@ where
     async fn sync_respond(
         &mut self,
         from: N::Addr,
-        request: SyncRequestMessage,
+        request: &[u8],
         client: &mut Client,
     ) -> Result<()> {
         let mut responder = SyncResponder::new();
@@ -355,10 +355,10 @@ where
         );
         match sm.t {
             SyncMessageType::Request => {
-                let st: SyncType = postcard::from_bytes(&sm.bytes)?;
-                match st {
-                    SyncType::Poll { request, .. } => {
-                        self.sync_respond(from, request, client).await?
+                let incoming = SyncIncoming::decode(&sm.bytes)?;
+                match incoming {
+                    SyncIncoming::Poll { raw, .. } => {
+                        self.sync_respond(from, raw, client).await?
                     }
                     _ => unimplemented!(),
                 };

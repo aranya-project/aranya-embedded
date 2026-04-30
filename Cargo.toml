@@ -3,14 +3,14 @@ resolver = "3"
 members = ["crates/*"]
 
 [workspace.dependencies]
-aranya-id = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "main", features = ["low-mem-usage"] }
-aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
-aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "main" }
+aranya-id = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-policy-lang = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-policy-compiler = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-policy-ifgen-build = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-runtime = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format", features = ["low-mem-usage"] }
+aranya-policy-ifgen = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-policy-vm = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
+aranya-crypto = { git = "https://github.com/aranya-project/aranya-core", branch = "sync-hide-wire-format" }
 spideroak-base58 = "0.2"
 
 adafruit-seesaw = "0.11"

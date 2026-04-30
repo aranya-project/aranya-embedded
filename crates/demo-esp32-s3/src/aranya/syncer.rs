@@ -8,8 +8,8 @@ use alloc::{
 use aranya_crypto::Rng;
 use aranya_runtime::{
     linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
-    StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
-    Transaction, TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
+    StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
+    TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -222,7 +222,7 @@ where
     async fn sync_respond(
         &self,
         from: N::Addr,
-        request: SyncRequestMessage,
+        request: &[u8],
         buffers: &mut TraversalBuffers,
     ) -> Result<()> {
         let mut responder = SyncResponder::new();
@@ -301,9 +301,9 @@ where
         );
         match sm.t {
             SyncMessageType::Request => {
-                let st: SyncType = postcard::from_bytes(&sm.bytes)?;
-                match st {
-                    SyncType::Poll { request, .. } => self.sync_respond(from, request, buffers).await?,
+                let incoming = SyncIncoming::decode(&sm.bytes)?;
+                match incoming {
+                    SyncIncoming::Poll { raw, .. } => self.sync_respond(from, raw, buffers).await?,
                     _ => unimplemented!(),
                 };
             }
