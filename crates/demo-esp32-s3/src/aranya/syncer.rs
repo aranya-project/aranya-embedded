@@ -7,8 +7,8 @@ use alloc::{
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
-    StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
+    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, PollIncoming, Segment,
+    Storage, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
     TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
@@ -222,11 +222,11 @@ where
     async fn sync_respond(
         &self,
         from: N::Addr,
-        request: &[u8],
+        poll: PollIncoming,
         buffers: &mut TraversalBuffers,
     ) -> Result<()> {
         let mut responder = SyncResponder::new();
-        responder.receive(request)?;
+        responder.receive(poll)?;
         log::info!("sync_respond: getting clinet");
         let mut aranya = self.imp.get_client().await;
         log::info!("sync_respond: got clinet");
@@ -303,7 +303,7 @@ where
             SyncMessageType::Request => {
                 let incoming = SyncIncoming::decode(&sm.bytes)?;
                 match incoming {
-                    SyncIncoming::Poll { raw, .. } => self.sync_respond(from, raw, buffers).await?,
+                    SyncIncoming::Poll(poll) => self.sync_respond(from, poll, buffers).await?,
                     _ => unimplemented!(),
                 };
             }
