@@ -7,9 +7,9 @@ use alloc::{
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, Segment, Storage,
-    StorageProvider, SyncError, SyncRequestMessage, SyncRequester, SyncResponder, SyncType,
-    Transaction, TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
+    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, PollIncoming, Segment,
+    Storage, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
+    TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
@@ -222,11 +222,11 @@ where
     async fn sync_respond(
         &self,
         from: N::Addr,
-        request: SyncRequestMessage,
+        poll: PollIncoming,
         buffers: &mut TraversalBuffers,
     ) -> Result<()> {
         let mut responder = SyncResponder::new();
-        responder.receive(request)?;
+        responder.receive(poll)?;
         log::info!("sync_respond: getting clinet");
         let mut aranya = self.imp.get_client().await;
         log::info!("sync_respond: got clinet");
@@ -301,9 +301,9 @@ where
         );
         match sm.t {
             SyncMessageType::Request => {
-                let st: SyncType = postcard::from_bytes(&sm.bytes)?;
-                match st {
-                    SyncType::Poll { request, .. } => self.sync_respond(from, request, buffers).await?,
+                let incoming = SyncIncoming::decode(&sm.bytes)?;
+                match incoming {
+                    SyncIncoming::Poll(poll) => self.sync_respond(from, poll, buffers).await?,
                     _ => unimplemented!(),
                 };
             }
