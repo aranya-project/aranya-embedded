@@ -3,9 +3,9 @@ use core::task::Poll;
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    Address, ClientError, Command, GraphId, PeerCache, PollIncoming, Segment, Storage,
-    StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
-    TraversalBuffer, TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
+    Address, Command, GraphId, PeerCache, PollIncoming, Segment, Storage, StorageProvider,
+    SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction, TraversalBuffer,
+    TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -322,7 +322,7 @@ where
             // We're done, destroy the requester
             log::info!("process_response: sync ended with {from}");
             // SAFETY: we know the session exists because we've been using it
-            let mut req_session = self.sync_session.take().unwrap();
+            let req_session = self.sync_session.take().unwrap();
             if let Some(trx) = req_session.trx {
                 log::info!("process_response: commiting");
                 client.commit(trx, &mut self.sink, &mut self.buffers.primary)?;
@@ -410,20 +410,7 @@ async fn add_commands(
 
     // Update peer cache
     let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-    let storage = client
-        .provider()
-        .get_storage(graph_id)
-        .map_err(|e| ClientError::StorageError(e))?;
-    for addr in addresses {
-        if let Some(cmd_loc) = storage
-            .get_location(addr, buffer)
-            .map_err(|e| ClientError::StorageError(e))?
-        {
-            peer_cache
-                .add_command(storage, addr, cmd_loc, buffer)
-                .map_err(|e| ClientError::StorageError(e))?;
-        }
-    }
+    client.update_heads(graph_id, addresses, peer_cache, buffer)?;
 
     Ok(())
 }

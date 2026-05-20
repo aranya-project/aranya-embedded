@@ -11,9 +11,8 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientError, ClientState, Command, GraphId,
-    PeerCache, Sink, Storage, StorageProvider, Transaction, TraversalBuffer, TraversalBuffers,
-    VmEffect,
+    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache, Sink,
+    Transaction, TraversalBuffer, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -121,27 +120,14 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
         // Update peer cache
         let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-        let storage = client
-            .provider()
-            .get_storage(self.graph_id)
-            .map_err(|e| ClientError::StorageError(e))?;
-        for addr in addresses {
-            if let Some(cmd_loc) = storage
-                .get_location(addr, buffer)
-                .map_err(|e| ClientError::StorageError(e))?
-            {
-                peer_cache
-                    .add_command(storage, addr, cmd_loc, buffer)
-                    .map_err(|e| ClientError::StorageError(e))?;
-            }
-        }
+        client.update_heads(self.graph_id, addresses, peer_cache, buffer)?;
 
         Ok(())
     }
 
     pub async fn commit(
         &self,
-        mut trx: Transaction<SP, PS>,
+        trx: Transaction<SP, PS>,
         buffer: &mut TraversalBuffer,
     ) -> Result<()> {
         let mut client = self.get_client().await;
