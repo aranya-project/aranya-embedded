@@ -172,7 +172,7 @@ where
     S: embedded_storage::ReadStorage,
     <S as embedded_storage::ReadStorage>::Error: core::fmt::Debug,
 {
-    fn fetch<T>(&self, offset: usize) -> Result<T, AranyaStorageError>
+    fn fetch<T>(&self, offset: u64) -> Result<T, AranyaStorageError>
     where
         T: serde::de::DeserializeOwned,
     {
@@ -288,7 +288,7 @@ where
     fn head(&self) -> Result<Location, AranyaStorageError> {
         self.header_cache
             .head
-            .map(|(a, b)| Ok(Location::new(SegmentIndex(a as usize), MaxCut(b as usize))))
+            .map(|(a, b)| Ok(Location::new(SegmentIndex::new(a.into()), MaxCut::new(b.into()))))
             .ok_or_else(|| {
                 log::error!("no head found");
                 AranyaStorageError::NoSuchStorage
@@ -297,10 +297,10 @@ where
 
     fn append<F, T>(&mut self, builder: F) -> Result<T, AranyaStorageError>
     where
-        F: FnOnce(usize) -> T,
+        F: FnOnce(u64) -> T,
         T: serde::Serialize,
     {
-        let offset = self.header_cache.stored_bytes;
+        let offset = self.header_cache.stored_bytes as u64;
         let item = builder(offset);
         let mut item_bytes =
             postcard::to_allocvec(&item).map_err(log_error(AranyaStorageError::IoError))?;
@@ -346,12 +346,12 @@ where
         self.update_header(|header| {
             let segment = head
                 .segment
-                .0
+                .get()
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
             let max_cut = head
                 .max_cut
-                .0
+                .get()
                 .try_into()
                 .map_err(log_error(AranyaStorageError::IoError))?;
             header.head = Some((segment, max_cut));
