@@ -112,6 +112,23 @@ pub struct IrdaTransmitter<'d> {
     en_driver: Output<'d>,
 }
 
+struct TxModeGuard {
+    peripheral: Arc<CriticalSectionMutex<PeripheralRef<'static, AnyUart>>>,
+}
+
+impl TxModeGuard {
+    fn enter(peripheral: Arc<CriticalSectionMutex<PeripheralRef<'static, AnyUart>>>) -> Self {
+        peripheral.lock(|p| p.set_tx_en(true));
+        Self { peripheral }
+    }
+}
+
+impl Drop for TxModeGuard {
+    fn drop(&mut self) {
+        self.peripheral.lock(|p| p.set_tx_en(false));
+    }
+}
+
 impl IrdaTransmitter<'_> {
     /// Switch the transceiver's enable pin.
     ///
@@ -127,14 +144,13 @@ impl IrdaTransmitter<'_> {
     /// aborts early and returns `false`. Returns `true` if all bytes
     /// were sent.
     pub async fn send(&mut self, buf: &[u8]) -> Result<bool, uart::Error> {
-        self.peripheral.lock(|p| p.set_tx_en(true));
+        let _tx_mode_guard = TxModeGuard::enter(Arc::clone(&self.peripheral));
         self.uart_tx.write_async(buf).await?;
         // We need to wait for everything to be sent here.
         // `write_async()` only waits when the TX FIFO is full.
         // Otherwise TX_EN gets turned off below before the message gets
         // fully sent.
         self.uart_tx.flush_async().await?;
-        self.peripheral.lock(|p| p.set_tx_en(false));
         Ok(true)
     }
 }
