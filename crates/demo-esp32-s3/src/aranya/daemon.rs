@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use core::ops::DerefMut;
 
 use aranya_crypto::{
@@ -11,8 +11,8 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache, Sink,
-    Transaction, TraversalBuffer, VmEffect,
+    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache,
+    RuntimeBuffers, Sink, Spill, StorageError, StorageProvider, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -35,6 +35,8 @@ pub(crate) type SP = LinearStorageProvider<GraphManager>;
 pub(crate) type SP = LinearStorageProvider<EspPartitionIoManager<FlashStorage>>;
 /// Aranya Client
 pub(crate) type Client = ClientState<PS, SP>;
+/// Caller-owned scratch buffers for graph-mutating operations
+pub(crate) type Buffers = RuntimeBuffers<<SP as StorageProvider>::Segment>;
 
 type KeyWrapKeyBytes = SecretKeyBytes<<<CS as CipherSuite>::Aead as Aead>::KeySize>;
 type KeyWrapKey = <<CS as CipherSuite>::Aead as Aead>::Key;
@@ -110,29 +112,30 @@ impl<S: Sink<VmEffect>> Imp<S> {
         cmds: &[impl Command + core::fmt::Debug],
         trx: &mut Option<Transaction<SP, PS>>,
         peer_cache: &mut PeerCache,
-        buffer: &mut TraversalBuffer,
+        buffers: &mut Buffers,
     ) -> Result<()> {
         let mut client = self.get_client().await;
         let trx = trx.get_or_insert_with(|| client.transaction(self.graph_id()));
         let mut sink = self.sink.lock().await;
         dump_commands(cmds);
-        client.add_commands(trx, sink.deref_mut(), cmds, buffer)?;
+        client.add_commands(trx, sink.deref_mut(), cmds, buffers, VecSpill::new)?;
 
         // Update peer cache
         let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-        client.update_heads(self.graph_id, addresses, peer_cache, buffer)?;
+        client.update_heads(
+            self.graph_id,
+            addresses,
+            peer_cache,
+            &mut buffers.traversal.primary,
+        )?;
 
         Ok(())
     }
 
-    pub async fn commit(
-        &self,
-        trx: Transaction<SP, PS>,
-        buffer: &mut TraversalBuffer,
-    ) -> Result<()> {
+    pub async fn commit(&self, trx: Transaction<SP, PS>, buffers: &mut Buffers) -> Result<()> {
         let mut client = self.get_client().await;
         let mut sink = self.sink.lock().await;
-        client.commit(trx, sink.deref_mut(), buffer)?;
+        client.commit(trx, sink.deref_mut(), buffers, VecSpill::new)?;
         Ok(())
     }
 
@@ -140,6 +143,44 @@ impl<S: Sink<VmEffect>> Imp<S> {
         let mut aranya = self.get_client().await;
         let mut sink = self.sink.lock().await;
         Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
+    }
+}
+
+/// In-memory spill for braid and convergence overflow data. The device has
+/// no filesystem, so file-backed spill is not an option.
+pub(crate) struct VecSpill {
+    buf: Vec<u8>,
+}
+
+impl VecSpill {
+    pub(crate) fn new() -> core::result::Result<Self, StorageError> {
+        Ok(Self { buf: Vec::new() })
+    }
+}
+
+impl Spill for VecSpill {
+    fn write_at(&mut self, offset: usize, data: &[u8]) -> core::result::Result<(), StorageError> {
+        let end = offset
+            .checked_add(data.len())
+            .ok_or(StorageError::IoError)?;
+        if end > self.buf.len() {
+            self.buf.resize(end, 0);
+        }
+        self.buf[offset..end].copy_from_slice(data);
+        Ok(())
+    }
+
+    fn read_at(
+        &mut self,
+        offset: usize,
+        data: &mut [u8],
+    ) -> core::result::Result<(), StorageError> {
+        let end = offset
+            .checked_add(data.len())
+            .ok_or(StorageError::IoError)?;
+        let src = self.buf.get(offset..end).ok_or(StorageError::IoError)?;
+        data.copy_from_slice(src);
+        Ok(())
     }
 }
 

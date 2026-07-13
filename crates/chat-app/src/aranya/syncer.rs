@@ -1,11 +1,11 @@
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec};
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec, vec::Vec};
 use core::task::Poll;
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    Address, Command, GraphId, PeerCache, PollIncoming, Segment, Storage, StorageProvider,
-    SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction, TraversalBuffer,
-    TraversalBuffers, MAX_SYNC_MESSAGE_SIZE,
+    Address, Command, GraphId, PeerCache, PollIncoming, RuntimeBuffers, Segment, Spill, Storage,
+    StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder,
+    Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -100,7 +100,7 @@ where
     sink: PubSubSink<'a>,
     hello_boost: u8,
     last_hello: Instant,
-    buffers: TraversalBuffers,
+    buffers: RuntimeBuffers<<SP as StorageProvider>::Segment>,
 }
 
 impl<N> SyncEngine<'_, N>
@@ -118,7 +118,7 @@ where
             sink: PubSubSink::new(),
             hello_boost: 0,
             last_hello: Instant::from_ticks(0),
-            buffers: TraversalBuffers::new(),
+            buffers: RuntimeBuffers::new(),
         }
     }
 }
@@ -150,7 +150,7 @@ where
                         log::info!("sync_peer: sync stalled for {peer_addr}");
                         // sync is stalled. Commit any progress so far and close the session
                         if let Some(trx) = session.trx.take() {
-                            client.commit(trx, &mut self.sink, &mut self.buffers.primary)?;
+                            client.commit(trx, &mut self.sink, &mut self.buffers, VecSpill::new)?;
                         }
                         self.sync_session = None;
                         self.sync_queue.remove(&peer_addr);
@@ -165,7 +165,7 @@ where
                 &mut send_buf,
                 client.provider(),
                 peer_cache,
-                &mut self.buffers.primary,
+                &mut self.buffers.traversal.primary,
             )?
         };
         log::info!("sync_peer: sending Request len {len} to {peer_addr}");
@@ -261,7 +261,7 @@ where
                     &mut msg_buf,
                     client.provider(),
                     peer_cache,
-                    &mut self.buffers,
+                    &mut self.buffers.traversal,
                 )?
             };
             log::info!(
@@ -314,7 +314,7 @@ where
                     &mut self.sink,
                     client,
                     self.graph_id,
-                    &mut self.buffers.primary,
+                    &mut self.buffers,
                 )
                 .await?;
             }
@@ -325,7 +325,7 @@ where
             let req_session = self.sync_session.take().unwrap();
             if let Some(trx) = req_session.trx {
                 log::info!("process_response: commiting");
-                client.commit(trx, &mut self.sink, &mut self.buffers.primary)?;
+                client.commit(trx, &mut self.sink, &mut self.buffers, VecSpill::new)?;
                 log::info!("process_response: done commiting");
             } else {
                 log::error!("process_response: No transaction!!")
@@ -375,7 +375,7 @@ where
                     let provider = client.provider();
                     let storage = provider.get_storage(self.graph_id)?;
                     storage
-                        .get_location(hello.head, &mut self.buffers.primary)?
+                        .get_location(hello.head, &mut self.buffers.traversal.primary)?
                         .is_some()
                 };
 
@@ -399,20 +399,63 @@ async fn add_commands(
     sink: &mut PubSubSink<'_>,
     client: &mut Client,
     graph_id: GraphId,
-    buffer: &mut TraversalBuffer,
+    buffers: &mut RuntimeBuffers<<SP as StorageProvider>::Segment>,
 ) -> Result<()> {
     let trx = trx.get_or_insert_with(|| client.transaction(graph_id));
     dump_commands(cmds);
     for cmd in cmds.chunks(1) {
-        client.add_commands(trx, sink, cmd, buffer)?;
+        client.add_commands(trx, sink, cmd, buffers, VecSpill::new)?;
         yield_now().await;
     }
 
     // Update peer cache
     let addresses = cmds.iter().filter_map(|cmd| cmd.address().ok());
-    client.update_heads(graph_id, addresses, peer_cache, buffer)?;
+    client.update_heads(
+        graph_id,
+        addresses,
+        peer_cache,
+        &mut buffers.traversal.primary,
+    )?;
 
     Ok(())
+}
+
+/// In-memory spill for braid and convergence overflow data. The device has
+/// no filesystem, so file-backed spill is not an option.
+struct VecSpill {
+    buf: Vec<u8>,
+}
+
+impl VecSpill {
+    fn new() -> core::result::Result<Self, StorageError> {
+        Ok(Self { buf: Vec::new() })
+    }
+}
+
+impl Spill for VecSpill {
+    fn write_at(&mut self, offset: usize, data: &[u8]) -> core::result::Result<(), StorageError> {
+        let end = offset
+            .checked_add(data.len())
+            .ok_or(StorageError::IoError)?;
+        if end > self.buf.len() {
+            self.buf.resize(end, 0);
+        }
+        self.buf[offset..end].copy_from_slice(data);
+        Ok(())
+    }
+
+    fn read_at(
+        &mut self,
+        offset: usize,
+        data: &mut [u8],
+    ) -> core::result::Result<(), StorageError> {
+        let end = offset
+            .checked_add(data.len())
+            .ok_or(StorageError::IoError)?;
+        let src = self.buf.get(offset..end).ok_or(StorageError::IoError)?;
+        data.copy_from_slice(src);
+        Ok(())
+    }
 }
 
 fn dump_commands(cmds: &[impl Command]) {
