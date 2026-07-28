@@ -139,10 +139,14 @@ impl<S: Sink<VmEffect>> Imp<S> {
         Ok(())
     }
 
-    pub async fn call_action(&self, action: aranya_runtime::VmAction<'_>) -> Result<()> {
+    pub async fn call_action(
+        &self,
+        action: aranya_runtime::VmAction<'_>,
+        buffers: &mut Buffers,
+    ) -> Result<()> {
         let mut aranya = self.get_client().await;
         let mut sink = self.sink.lock().await;
-        Ok(aranya.action(self.graph_id, sink.deref_mut(), action)?)
+        Ok(aranya.action(self.graph_id, sink.deref_mut(), action, buffers, VecSpill::new)?)
     }
 }
 

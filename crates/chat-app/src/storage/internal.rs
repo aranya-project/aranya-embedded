@@ -4,8 +4,9 @@ use alloc::{sync::Arc, vec, vec::Vec};
 use core::cell::RefCell;
 
 use aranya_runtime::{
-    linear::LinearStorageProvider, storage::linear::io, GraphId, Location, MaxCut, SegmentIndex,
-    StorageError as AranyaStorageError,
+    linear::LinearStorageProvider,
+    storage::{linear::io, HeadSetOffset},
+    GraphId, HeadSet, StorageError as AranyaStorageError,
 };
 use embassy_sync::blocking_mutex::{raw::CriticalSectionRawMutex, Mutex};
 use embedded_storage::Storage;
@@ -19,7 +20,10 @@ use super::StorageError;
 struct EspStorageHeader {
     epoch: u32,
     graph_id: Option<GraphId>,
-    head: Option<(u32, u32)>,
+    /// Flash offset of the appended `HeadSet` record.
+    heads: Option<u64>,
+    /// Flash offset of the cached merged fact index.
+    fact_cache: Option<u64>,
     stored_bytes: usize,
 }
 
@@ -284,14 +288,28 @@ where
         }
     }
 
-    fn head(&self) -> Result<Location, AranyaStorageError> {
-        self.header_cache
-            .head
-            .map(|(a, b)| Ok(Location::new(SegmentIndex::new(a.into()), MaxCut::new(b.into()))))
-            .ok_or_else(|| {
-                log::error!("no head found");
-                AranyaStorageError::NoSuchStorage
-            })?
+    fn heads(&self) -> Result<HeadSet, AranyaStorageError> {
+        let offset = self.header_cache.heads.ok_or_else(|| {
+            log::error!("no heads found");
+            AranyaStorageError::NoSuchStorage
+        })?;
+        io::Read::fetch(&self.readonly(), offset)
+    }
+
+    fn heads_offset(&self) -> Result<HeadSetOffset, AranyaStorageError> {
+        let offset = self.header_cache.heads.ok_or_else(|| {
+            log::error!("no heads found");
+            AranyaStorageError::NoSuchStorage
+        })?;
+        Ok(HeadSetOffset::new(offset))
+    }
+
+    fn fact_cache(&self) -> Result<io::FactCacheOffset, AranyaStorageError> {
+        let offset = self.header_cache.fact_cache.ok_or_else(|| {
+            log::error!("no fact cache found");
+            AranyaStorageError::NoSuchStorage
+        })?;
+        Ok(io::FactCacheOffset::new(offset))
     }
 
     fn append<F, T>(&mut self, builder: F) -> Result<T, AranyaStorageError>
@@ -340,20 +358,22 @@ where
         Ok(item)
     }
 
-    fn commit(&mut self, head: Location) -> Result<(), AranyaStorageError> {
-        log::debug!("commit {head}");
+    fn commit(
+        &mut self,
+        heads: &HeadSet,
+        fact_cache: io::FactCacheOffset,
+    ) -> Result<(), AranyaStorageError> {
+        log::debug!("commit {} heads", heads.len());
+        // Append the head set record, then point the header at it and the
+        // fact cache.
+        let mut heads_offset = 0u64;
+        self.append(|offset| {
+            heads_offset = offset;
+            heads.clone()
+        })?;
         self.update_header(|header| {
-            let segment = head
-                .segment
-                .get()
-                .try_into()
-                .map_err(log_error(AranyaStorageError::IoError))?;
-            let max_cut = head
-                .max_cut
-                .get()
-                .try_into()
-                .map_err(log_error(AranyaStorageError::IoError))?;
-            header.head = Some((segment, max_cut));
+            header.heads = Some(heads_offset);
+            header.fact_cache = Some(fact_cache.get());
             Ok(())
         })
         .map_err(log_error(AranyaStorageError::IoError))?;
@@ -387,7 +407,8 @@ where
                 let header = EspStorageHeader {
                     epoch: 0,
                     graph_id: None,
-                    head: None,
+                    heads: None,
+                    fact_cache: None,
                     stored_bytes: 0,
                 };
                 write_header(&storage, &header, partition.offset).expect("could not write header");

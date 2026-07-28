@@ -166,10 +166,11 @@ where
             let mut peer_caches = self.peer_caches.lock().await;
             let peer_cache = peer_caches.entry(peer_addr).or_default();
             log::info!("peer_cache for {peer_addr}: {peer_cache:?}");
+            let session = peer_cache.session_heads();
             requester.poll(
                 &mut send_buf,
                 client.provider(),
-                peer_cache,
+                &session,
                 &mut buffers.traversal.primary,
             )?
         };
@@ -199,16 +200,14 @@ where
         let mut aranya = self.imp.get_client().await;
         let provider = aranya.provider();
         let storage = provider.get_storage(graph_id)?;
-        let head = storage.get_head()?;
-
-        let segment = storage.get_segment(head)?;
-        let command = segment.get_command(head).expect("location must exist");
-
-        let address = Address {
-            id: command.id(),
-            //BUG: can this really not fail?
-            max_cut: command.max_cut().expect("BUG: Why can it fail?"),
-        };
+        // The graph may be multi-head (lazy merges); advertise the head with
+        // the greatest max_cut.
+        let address = storage
+            .get_heads()?
+            .iter()
+            .max_by_key(|h| h.max_cut)
+            .expect("initialized graph has at least one head")
+            .address();
 
         let hello: HelloMessage<N> = HelloMessage {
             address: self.network.my_address(),
