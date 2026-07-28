@@ -40,7 +40,7 @@ use parameter_store::{EmbeddedStorageIO, ParameterStore, ParameterStoreError, Pa
 use static_cell::StaticCell;
 
 use crate::{
-    aranya::daemon::{Daemon, Imp},
+    aranya::daemon::{Buffers, Daemon, Imp},
     hardware::neopixel::{NeopixelSink, NEOPIXEL_SIGNAL},
     net::NetworkEngine,
     watchdog::Watchdog,
@@ -285,17 +285,21 @@ async fn button_task(
     mut parameters: ParameterStore<Parameters, EmbeddedStorageIO<FlashStorage>>,
 ) {
     let mut driver = Input::new(pin, Pull::Up);
+    let mut buffers = Buffers::new();
     loop {
         driver.wait_for_falling_edge().await;
         match embassy_time::with_timeout(Duration::from_secs(5), driver.wait_for_high()).await {
             Ok(_) => {
                 log::info!("led pressed");
                 match imp
-                    .call_action(vm_action!(set_led(
-                        color.red as i64,
-                        color.green as i64,
-                        color.blue as i64
-                    )))
+                    .call_action(
+                        vm_action!(set_led(
+                            color.red as i64,
+                            color.green as i64,
+                            color.blue as i64
+                        )),
+                        &mut buffers,
+                    )
                     .await
                 {
                     Ok(_) => (),
