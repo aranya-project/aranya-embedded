@@ -1,8 +1,6 @@
 #![no_std]
 #![no_main]
 #![feature(impl_trait_in_assoc_type)]
-#![feature(core_io_borrowed_buf)]
-#![feature(new_zeroed_alloc)]
 
 extern crate alloc;
 

@@ -1,6 +1,6 @@
 #![cfg(feature = "storage-internal")]
 
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec, vec::Vec};
 use core::cell::RefCell;
 
 use aranya_runtime::{
@@ -204,8 +204,7 @@ where
 
         log::debug!("Fetching segment @ {offset}, len {data_size}");
         log::trace!("  header bytes: {:?}", &segment_header);
-        // SAFETY: the box is zeroed before we `assume_init()`
-        let mut byte_buf = unsafe { Box::new_zeroed_slice(data_size).assume_init() };
+        let mut byte_buf = vec![0; data_size];
         let read_pos = read_pos + (MAGIC_LEN + SEGMENT_HEADER_SIZE) as u32;
         self.storage
             .lock(|s| s.borrow_mut().read(read_pos, &mut byte_buf))
