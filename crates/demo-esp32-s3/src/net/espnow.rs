@@ -26,11 +26,7 @@
 //!
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
-use core::{
-    io::BorrowedBuf,
-    mem::MaybeUninit,
-    sync::atomic::{AtomicU32, AtomicU8, Ordering},
-};
+use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -183,31 +179,22 @@ impl<'o> EspNowNetworkEngine<'o> {
 
     /// Send a message to a recipient
     async fn send_packet(&self, packet: EspNowPacket) -> Result<u16, EspNowError> {
-        let mut output_buf: [MaybeUninit<u8>; ESP_NOW_PACKET_SIZE] =
-            [MaybeUninit::uninit(); ESP_NOW_PACKET_SIZE];
-        let mut bb = BorrowedBuf::from(&mut output_buf[..]);
-        {
-            let mut bc = bb.unfilled();
-            // SAFETY: This shouldn't overflow as we should be writing at most `ESP_NOW_PACKET_SIZE`
-            // bytes.
-            bc.append(&ESP_NOW_MAGIC);
-            bc.append(&u16::to_be_bytes(packet.recipient));
-            bc.append(&u16::to_be_bytes(self.my_address));
-            bc.append(&u8::to_be_bytes(packet.message_seq));
-            bc.append(&u16::to_be_bytes(packet.chunk_len));
-            bc.append(&u16::to_be_bytes(packet.total_len));
-            bc.append(&packet.contents);
-        }
-        let crc = CRC.checksum(&bb.filled()[3..]); // do not CRC magic bytes
-        {
-            let mut bc = bb.unfilled();
-            bc.append(&u16::to_be_bytes(crc));
-        }
+        let mut buf = heapless::Vec::<u8, ESP_NOW_PACKET_SIZE>::new();
+        // These shouldn't overflow as we should be writing at most `ESP_NOW_PACKET_SIZE` bytes.
+        buf.extend_from_slice(&ESP_NOW_MAGIC).unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.recipient)).unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(self.my_address)).unwrap();
+        buf.extend_from_slice(&u8::to_be_bytes(packet.message_seq)).unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.chunk_len)).unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.total_len)).unwrap();
+        buf.extend_from_slice(&packet.contents).unwrap();
+        let crc = CRC.checksum(&buf[3..]); // do not CRC magic bytes
+        buf.extend_from_slice(&u16::to_be_bytes(crc)).unwrap();
 
         self.sender
             .lock()
             .await
-            .send_async(&BROADCAST_ADDRESS, bb.filled())
+            .send_async(&BROADCAST_ADDRESS, &buf)
             .await
             .map_err(|_| EspNowError::EspNow)?;
 
