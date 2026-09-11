@@ -213,17 +213,7 @@ where
         log::info!("send_hello");
         // BUG: check if it the same as our head before accessing storage.
 
-        let provider = client.provider();
-        let storage = provider.get_storage(self.graph_id)?;
-        // The graph may be multi-head (lazy merges); advertise the head with
-        // the greatest max_cut.
-        let address = storage
-            .get_heads()?
-            .iter()
-            .max_by_key(|h| h.max_cut)
-            .expect("initialized graph has at least one head")
-            .address();
-
+        let address = client.hello_head(self.graph_id)?;
         let hello: HelloMessage<N> = HelloMessage {
             address: self.network.my_address(),
             peer_count: 0,
