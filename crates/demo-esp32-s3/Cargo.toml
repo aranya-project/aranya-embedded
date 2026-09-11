@@ -33,7 +33,7 @@ esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 esp-storage = { workspace = true }
 fugit = { workspace = true }
-getrandom = { workspace = true, features = ["custom"] }
+getrandom = { workspace = true }
 heapless = { workspace = true }
 log = { workspace = true }
 owo-colors = { workspace = true }
@@ -88,7 +88,7 @@ serde = { workspace = true, features = ["derive"] }
 
 
 [features]
-default = ["net-esp-now", "spideroak-demo-v2", "storage-internal"]
+default = ["net-irda", "adafruit-feather-s3", "storage-internal"]
 
 adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
 adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]

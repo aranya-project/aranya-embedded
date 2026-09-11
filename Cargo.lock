@@ -528,7 +528,7 @@ dependencies = [
  "esp-storage",
  "esp-wifi",
  "fugit",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "heapless",
  "log",
  "num-traits",
@@ -939,7 +939,7 @@ dependencies = [
  "esp-storage",
  "esp-wifi",
  "fugit",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "heapless",
  "log",
  "owo-colors",
@@ -1740,7 +1740,7 @@ dependencies = [
  "esp-println",
  "esp-rmt-neopixel",
  "fugit",
- "getrandom 0.2.17",
+ "getrandom 0.4.3",
  "log",
  "nb 1.1.0",
 ]
@@ -1841,17 +1841,6 @@ checksum = "4bb6743198531e02858aeaea5398fcc883e71851fcbcb5a2f773e2fb6cb1edf2"
 dependencies = [
  "typenum",
  "version_check",
-]
-
-[[package]]
-name = "getrandom"
-version = "0.2.17"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ff2abc00be7fca6ebc474524697ae276ad847ad0a6b3faa4bcb027e9a4614ad0"
-dependencies = [
- "cfg-if",
- "libc",
- "wasi",
 ]
 
 [[package]]
@@ -3371,12 +3360,6 @@ name = "void"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6a02e4885ed3bc0f2de90ea6dd45ebcbb66dacffe03547fadbb0eeae2770887d"
-
-[[package]]
-name = "wasi"
-version = "0.11.1+wasi-snapshot-preview1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ccf3ec651a847eb01de73ccad15eb7d99f80485de043efb2f370cd654f4ea44b"
 
 [[package]]
 name = "wasip2"
