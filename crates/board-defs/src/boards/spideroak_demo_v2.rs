@@ -31,7 +31,7 @@ macro_rules! board_def {
             indicators: $crate::IndicatorsPinDef {
                 tx_led: Some($peripherals.GPIO10.degrade()),
                 rx_led: Some($peripherals.GPIO11.degrade()),
-            }
+            },
         }
     }};
 }

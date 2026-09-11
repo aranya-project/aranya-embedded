@@ -23,6 +23,21 @@ concurrency:
 
 
 jobs:
+  check-fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install cargo-make
+        uses: aranya-project/install-action@main
+        with:
+          tool: cargo-make@0.37.24
+
+      - name: Check formatting
+        run: cargo make check-fmt
+
+
   check-standard-crates:
     runs-on: ubuntu-latest
     strategy:

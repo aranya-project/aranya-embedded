@@ -21,7 +21,7 @@ macro_rules! board_def {
             indicators: $crate::IndicatorsPinDef {
                 tx_led: None,
                 rx_led: None,
-            }
+            },
         }
     }};
 }
