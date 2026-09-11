@@ -8,7 +8,7 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientState, GraphId, RuntimeBuffers,
+    linear::LinearStorageProvider, mem_spill, vm_action, ClientState, GraphId, RuntimeBuffers,
     StorageProvider, VmAction, VmEffect,
 };
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
@@ -21,10 +21,7 @@ use crate::net::espnow::EspNowNetworkInterface;
 #[cfg(feature = "net-irda")]
 use crate::net::irda::IrNetworkInterface;
 use crate::{
-    aranya::{
-        sink::PubSubSink,
-        syncer::{SyncEngine, VecSpill},
-    },
+    aranya::{sink::PubSubSink, syncer::SyncEngine},
     storage::imp::*,
 };
 
@@ -146,7 +143,7 @@ impl<'a> Daemon<'a> {
                     &mut sink,
                     action,
                     &mut buffers,
-                    VecSpill::new,
+                    mem_spill,
                 ) {
                     Ok(_) => {
                         #[cfg(feature = "net-esp-now")]

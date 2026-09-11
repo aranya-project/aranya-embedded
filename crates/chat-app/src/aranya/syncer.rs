@@ -3,9 +3,9 @@ use core::task::Poll;
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    Address, Command, CommandExt as _, GraphId, PeerCache, PollIncoming, RuntimeBuffers, Spill,
-    Storage, StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder,
-    Transaction, MAX_SYNC_MESSAGE_SIZE,
+    mem_spill, Address, Command, CommandExt as _, GraphId, PeerCache, PollIncoming, RuntimeBuffers,
+    Spill, Storage, StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester,
+    SyncResponder, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -150,7 +150,7 @@ where
                         log::info!("sync_peer: sync stalled for {peer_addr}");
                         // sync is stalled. Commit any progress so far and close the session
                         if let Some(trx) = session.trx.take() {
-                            client.commit(trx, &mut self.sink, &mut self.buffers, VecSpill::new)?;
+                            client.commit(trx, &mut self.sink, &mut self.buffers, mem_spill)?;
                         }
                         self.sync_session = None;
                         self.sync_queue.remove(&peer_addr);
@@ -324,7 +324,7 @@ where
             let req_session = self.sync_session.take().unwrap();
             if let Some(trx) = req_session.trx {
                 log::info!("process_response: commiting");
-                client.commit(trx, &mut self.sink, &mut self.buffers, VecSpill::new)?;
+                client.commit(trx, &mut self.sink, &mut self.buffers, mem_spill)?;
                 log::info!("process_response: done commiting");
             } else {
                 log::error!("process_response: No transaction!!")
@@ -403,7 +403,7 @@ async fn add_commands(
     let trx = trx.get_or_insert_with(|| client.transaction(graph_id));
     dump_commands(cmds);
     for cmd in cmds.chunks(1) {
-        client.add_commands(trx, sink, cmd, buffers, VecSpill::new)?;
+        client.add_commands(trx, sink, cmd, buffers, mem_spill)?;
         yield_now().await;
     }
 
@@ -417,44 +417,6 @@ async fn add_commands(
     )?;
 
     Ok(())
-}
-
-/// In-memory spill for braid and convergence overflow data. The device has
-/// no filesystem, so file-backed spill is not an option.
-pub(crate) struct VecSpill {
-    buf: Vec<u8>,
-}
-
-impl VecSpill {
-    pub(crate) fn new() -> core::result::Result<Self, StorageError> {
-        Ok(Self { buf: Vec::new() })
-    }
-}
-
-impl Spill for VecSpill {
-    fn write_at(&mut self, offset: usize, data: &[u8]) -> core::result::Result<(), StorageError> {
-        let end = offset
-            .checked_add(data.len())
-            .ok_or(StorageError::IoError)?;
-        if end > self.buf.len() {
-            self.buf.resize(end, 0);
-        }
-        self.buf[offset..end].copy_from_slice(data);
-        Ok(())
-    }
-
-    fn read_at(
-        &mut self,
-        offset: usize,
-        data: &mut [u8],
-    ) -> core::result::Result<(), StorageError> {
-        let end = offset
-            .checked_add(data.len())
-            .ok_or(StorageError::IoError)?;
-        let src = self.buf.get(offset..end).ok_or(StorageError::IoError)?;
-        data.copy_from_slice(src);
-        Ok(())
-    }
 }
 
 fn dump_commands(cmds: &[impl Command]) {
