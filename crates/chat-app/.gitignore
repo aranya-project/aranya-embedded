@@ -15,4 +15,3 @@ config/wifi.ron
 # build.rs generated files
 src/built/*
 !src/built/mod.rs
-src/aranya/policy.rs
