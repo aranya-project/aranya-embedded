@@ -3,9 +3,9 @@ use core::task::Poll;
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    Address, Command, GraphId, PeerCache, PollIncoming, RuntimeBuffers, Segment, Spill, Storage,
-    StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder,
-    Transaction, MAX_SYNC_MESSAGE_SIZE,
+    Address, Command, CommandExt as _, GraphId, PeerCache, PollIncoming, RuntimeBuffers, Segment,
+    Spill, Storage, StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester,
+    SyncResponder, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};

@@ -11,8 +11,8 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientState, Command, GraphId, PeerCache,
-    RuntimeBuffers, Sink, Spill, StorageError, StorageProvider, Transaction, VmEffect,
+    linear::LinearStorageProvider, vm_action, ClientState, Command, CommandExt as _, GraphId,
+    PeerCache, RuntimeBuffers, Sink, Spill, StorageError, StorageProvider, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
