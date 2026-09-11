@@ -138,21 +138,20 @@ impl<'a> Daemon<'a> {
 
         loop {
             match with_timeout(Duration::from_millis(100), ACTION_IN_CHANNEL.receive()).await {
-                Ok(action) => match self.aranya.action(
-                    graph_id,
-                    &mut sink,
-                    action,
-                    &mut buffers,
-                    mem_spill,
-                ) {
-                    Ok(_) => {
-                        #[cfg(feature = "net-esp-now")]
-                        syncer_esp_now.boost_hello(ACTION_BOOST, true);
-                        #[cfg(feature = "net-irda")]
-                        syncer_ir.boost_hello(ACTION_BOOST, true);
+                Ok(action) => {
+                    match self
+                        .aranya
+                        .action(graph_id, &mut sink, action, &mut buffers, mem_spill)
+                    {
+                        Ok(_) => {
+                            #[cfg(feature = "net-esp-now")]
+                            syncer_esp_now.boost_hello(ACTION_BOOST, true);
+                            #[cfg(feature = "net-irda")]
+                            syncer_ir.boost_hello(ACTION_BOOST, true);
+                        }
+                        Err(err) => println!("Error from action: {err}"),
                     }
-                    Err(err) => println!("Error from action: {err}"),
-                },
+                }
                 Err(_) => (),
             }
             #[cfg(feature = "net-esp-now")]

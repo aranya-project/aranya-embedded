@@ -182,11 +182,16 @@ impl<'o> EspNowNetworkEngine<'o> {
         let mut buf = heapless::Vec::<u8, ESP_NOW_PACKET_SIZE>::new();
         // These shouldn't overflow as we should be writing at most `ESP_NOW_PACKET_SIZE` bytes.
         buf.extend_from_slice(&ESP_NOW_MAGIC).unwrap();
-        buf.extend_from_slice(&u16::to_be_bytes(packet.recipient)).unwrap();
-        buf.extend_from_slice(&u16::to_be_bytes(self.my_address)).unwrap();
-        buf.extend_from_slice(&u8::to_be_bytes(packet.message_seq)).unwrap();
-        buf.extend_from_slice(&u16::to_be_bytes(packet.chunk_len)).unwrap();
-        buf.extend_from_slice(&u16::to_be_bytes(packet.total_len)).unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.recipient))
+            .unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(self.my_address))
+            .unwrap();
+        buf.extend_from_slice(&u8::to_be_bytes(packet.message_seq))
+            .unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.chunk_len))
+            .unwrap();
+        buf.extend_from_slice(&u16::to_be_bytes(packet.total_len))
+            .unwrap();
         buf.extend_from_slice(&packet.contents).unwrap();
         let crc = CRC.checksum(&buf[3..]); // do not CRC magic bytes
         buf.extend_from_slice(&u16::to_be_bytes(crc)).unwrap();
