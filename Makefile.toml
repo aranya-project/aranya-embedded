@@ -1,11 +1,6 @@
 [env]
 CARGO_MAKE_EXTEND_WORKSPACE_MAKEFILE = 1
 RUSTDOCFLAGS = { value = "", condition = { env_not_set = ["RUSTDOCFLAGS"] } }
-NIGHTLY = { script = [
-    "cat rust-nightly.txt",
-], condition = { env_not_set = [
-    "NIGHTLY",
-] } }
 
 RUSTFLAGS = { value = "-Dwarnings", condition = { env_true = [
     "CARGO_MAKE_CI",
@@ -22,13 +17,6 @@ skip_rust_env_info = true
 description = "List tasks"
 script = "cargo make --quiet --list-all-steps --hide-uninteresting"
 
-# Misc
-[tasks.install-nightly]
-description = "Install nightly rust"
-# First check if the toolchain is installed, because that is much faster.
-# Don't do this if you want to keep a rolling channel up-to-date.
-script = "rustup run ${NIGHTLY} true 2>/dev/null || rustup toolchain install ${NIGHTLY} --profile minimal -c rustfmt"
-
 # Correctness
 [tasks.check-fmt]
 dependencies = ["check-fmt-rust", "check-fmt-toml"]
@@ -41,18 +29,14 @@ description = "Format files"
 [tasks.check-fmt-rust]
 category = "correctness"
 description = "Check rust code formatting"
-toolchain = "${NIGHTLY}"
-command = "cargo"
-args = ["fmt", "--all", "--", "--check"]
-dependencies = ["install-nightly"]
+command = "scripts/cargo-fmt.sh"
+args = ["--all", "--", "--check"]
 
 [tasks.fmt-rust]
 category = "correctness"
 description = "Format rust code"
-toolchain = "${NIGHTLY}"
-command = "cargo"
-args = ["fmt", "--all"]
-dependencies = ["install-nightly"]
+command = "scripts/cargo-fmt.sh"
+args = ["--all"]
 
 [tasks.check-fmt-toml]
 category = "correctness"
