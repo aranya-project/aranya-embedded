@@ -88,7 +88,7 @@ serde = { workspace = true, features = ["derive"] }
 
 
 [features]
-default = ["net-irda", "adafruit-feather-s3", "storage-internal"]
+default = ["adafruit-feather-s3", "net-irda", "storage-internal"]
 
 adafruit-feather-s3 = ["board-defs/adafruit-feather-s3"]
 adafruit-qtpy-s3 = ["board-defs/adafruit-qtpy-s3"]
