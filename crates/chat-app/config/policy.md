@@ -35,8 +35,8 @@ command Init {
         nonce bytes,
     }
 
-    seal { return envelope::do_seal(serialize(this)) }
-    open { return deserialize(envelope::do_open(envelope)) }
+    seal { return envelope::do_seal(payload) }
+    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {
@@ -68,8 +68,8 @@ command ChatMessage {
         msg string,
     }
 
-    seal { return envelope::do_seal(serialize(this)) }
-    open { return deserialize(envelope::do_open(envelope)) }
+    seal { return envelope::do_seal(payload) }
+    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {
@@ -102,8 +102,8 @@ command Rainbow {
         author id
     }
 
-    seal { return envelope::do_seal(serialize(this)) }
-    open { return deserialize(envelope::do_open(envelope)) }
+    seal { return envelope::do_seal(payload) }
+    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {
@@ -135,18 +135,28 @@ command SetAmbientColor {
         color enum AmbientColor,
     }
 
-    seal { return envelope::do_seal(serialize(this)) }
-    open { return deserialize(envelope::do_open(envelope)) }
+    seal { return envelope::do_seal(payload) }
+    open { return envelope::do_open(payload, envelope) }
 
     policy {
-        let current_color_fact = unwrap query CurrentColor[]=>{color: ?}
-        let current_color = current_color_fact.color
-
-        finish {
-            update CurrentColor[]=>{color: current_color} to {color: this.color}
-            emit AmbientColorChanged {
-                author: this.author,
-                color: this.color,
+        match query CurrentColor[] {
+            Some(old) => {
+                finish {
+                    update CurrentColor[]=>{color: old.color} to {color: this.color}
+                    emit AmbientColorChanged {
+                        author: this.author,
+                        color: this.color,
+                    }
+                }
+            }
+            None => {
+                finish {
+                    create CurrentColor[]=>{color:this.color}
+                    emit AmbientColorChanged {
+                        author: this.author,
+                        color: this.color,
+                    }
+                }
             }
         }
     }

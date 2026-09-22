@@ -8,7 +8,8 @@ use aranya_crypto::{
     CipherSuite,
 };
 use aranya_runtime::{
-    linear::LinearStorageProvider, vm_action, ClientState, GraphId, VmAction, VmEffect,
+    linear::LinearStorageProvider, mem_spill, vm_action, ClientState, GraphId, RuntimeBuffers,
+    StorageProvider, VmAction, VmEffect,
 };
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;
 use embassy_time::{with_timeout, Duration};
@@ -126,6 +127,7 @@ impl<'a> Daemon<'a> {
 
     pub async fn run(&mut self, graph_id: GraphId) -> Result<()> {
         let mut sink = PubSubSink::new();
+        let mut buffers: RuntimeBuffers<<SP as StorageProvider>::Segment> = RuntimeBuffers::new();
         #[cfg(feature = "net-esp-now")]
         let syncer_esp_now = self
             .syncer_esp_now
@@ -136,7 +138,13 @@ impl<'a> Daemon<'a> {
 
         loop {
             match with_timeout(Duration::from_millis(100), ACTION_IN_CHANNEL.receive()).await {
-                Ok(action) => match self.aranya.action(graph_id, &mut sink, action) {
+                Ok(action) => match self.aranya.action(
+                    graph_id,
+                    &mut sink,
+                    action,
+                    &mut buffers,
+                    mem_spill,
+                ) {
                     Ok(_) => {
                         #[cfg(feature = "net-esp-now")]
                         syncer_esp_now.boost_hello(ACTION_BOOST, true);

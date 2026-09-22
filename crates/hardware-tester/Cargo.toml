@@ -20,7 +20,7 @@ esp-hal = { workspace = true }
 esp-hal-embassy = { workspace = true }
 esp-println = { workspace = true, features = ["log"] }
 fugit = { workspace = true }
-getrandom = { workspace = true, features = ["custom"] }
+getrandom = { workspace = true }
 log = { workspace = true }
 nb = { workspace = true }
 

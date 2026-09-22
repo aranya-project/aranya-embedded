@@ -23,8 +23,6 @@ struct Envelope {
     author_id id,
     // Uniquely identifies the command.
     command_id id,
-    // The encoded command.
-    payload bytes,
     // The signature over the command and its contextual
     // bindings.
     signature bytes,
@@ -59,19 +57,19 @@ impl NullEnvelope {
             parent_id: parent_id.as_base(),
             author_id: author_id.as_base(),
             command_id,
-            payload,
             // TODO(chip): use an actual signature
             signature: b"LOL".to_vec(),
         })
     }
 
-    #[ffi_export(def = "function do_open(envelope_input struct Envelope) bytes")]
+    #[ffi_export(def = "function do_open(payload bytes, envelope_input struct Envelope) unit")]
     fn open<CE>(
         &self,
         _ctx: &CommandContext,
         _eng: &CE,
-        envelope_input: Envelope,
-    ) -> Result<Vec<u8>, Infallible> {
-        Ok(envelope_input.payload)
+        _payload: Vec<u8>,
+        _envelope: Envelope,
+    ) -> Result<(), Infallible> {
+        Ok(())
     }
 }
