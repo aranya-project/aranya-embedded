@@ -1,5 +1,4 @@
 #![no_std]
-#![feature(iter_array_chunks)]
 
 extern crate alloc;
 
