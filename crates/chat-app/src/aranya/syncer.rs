@@ -346,9 +346,7 @@ where
             SyncMessageType::Request => {
                 let incoming = SyncIncoming::decode(&sm.bytes)?;
                 match incoming {
-                    SyncIncoming::Poll(poll) => {
-                        self.sync_respond(from, poll, client).await?
-                    }
+                    SyncIncoming::Poll(poll) => self.sync_respond(from, poll, client).await?,
                     _ => unimplemented!(),
                 };
             }
