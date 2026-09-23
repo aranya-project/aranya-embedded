@@ -1,9 +1,8 @@
-use alloc::{boxed::Box, vec, vec::Vec};
+use alloc::vec;
 
-use aranya_crypto::{DeviceId, Engine};
+use aranya_crypto::Engine;
 use aranya_policy_vm::{Machine, Module};
-use aranya_runtime::{FfiCallable, PolicyError, PolicyId, VmEffect, VmPolicy};
-use envelope_ffi::NullEnvelope;
+use aranya_runtime::{PolicyError, PolicyId, VmEffect, VmPolicy};
 use rkyv::{rancor::Error as RancorError, util::AlignedVec};
 
 use super::error::Result as DaemonResult;
@@ -29,10 +28,7 @@ where
         vec.extend_from_slice(SERIALIZED_POLICY);
         let module: Module = rkyv::from_bytes::<Module, RancorError>(&vec)?;
         let machine = Machine::from_module(module)?;
-        let ffis: Vec<Box<dyn FfiCallable<CE> + Send + 'static>> = vec![Box::from(NullEnvelope {
-            user: DeviceId::default(),
-        })];
-        let policy = VmPolicy::new(machine, crypto_engine, ffis).expect("Could not load policy");
+        let policy = VmPolicy::new(machine, crypto_engine, vec![]).expect("Could not load policy");
         Ok(EmbeddedPolicyStore { policy })
     }
 }
@@ -50,5 +46,12 @@ where
 
     fn get_policy(&self, _id: PolicyId) -> Result<&Self::Policy, PolicyError> {
         Ok(&self.policy)
+    }
+
+    fn seal_ctx(
+        &self,
+        id: PolicyId,
+    ) -> Result<&<Self::Policy as aranya_runtime::Policy>::SealCtx, PolicyError> {
+        todo!()
     }
 }

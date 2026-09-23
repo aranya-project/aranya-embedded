@@ -3,8 +3,24 @@ policy-version: 2
 ---
 
 ```policy
-use envelope
+base command BaseInit {
+    fields { key bytes }
+    get_key { return Some(this.key) }
+}
 
+base command Base {
+    get_key {
+        return match query Key[] {
+            Some(f) => Some(f.key)
+            None => None
+        }
+    }
+}
+
+fact Key[]=>{key bytes}
+```
+
+```policy
 enum AmbientColor {
     Black,
     Blue,
@@ -18,15 +34,13 @@ enum AmbientColor {
 
 fact CurrentColor[]=>{color enum AmbientColor}
 
-action create_team(nonce bytes) {
-    publish Init {
-        nonce: nonce,
-    }
+action create_team(nonce bytes, key bytes) {
+    publish Init { key, nonce }
 }
 
 effect TeamCreated {}
 
-command Init {
+command Init with BaseInit {
     attributes {
         init: true,
     }
@@ -35,11 +49,9 @@ command Init {
         nonce bytes,
     }
 
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
-
     policy {
         finish {
+            create Key[]=>{key: this.key}
             create CurrentColor[]=>{color: AmbientColor::Black}
             emit TeamCreated {}
         }
@@ -47,10 +59,7 @@ command Init {
 }
 
 action send_message(author id, msg string) {
-    publish ChatMessage {
-        author: author,
-        msg: msg,
-    }
+    publish ChatMessage { author, msg }
 }
 
 effect MessageReceived {
@@ -58,7 +67,7 @@ effect MessageReceived {
     msg string,
 }
 
-command ChatMessage {
+command ChatMessage with Base {
     attributes {
         priority: 0,
     }
@@ -67,9 +76,6 @@ command ChatMessage {
         author id,
         msg string,
     }
-
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {
@@ -93,7 +99,7 @@ effect RainbowEffect {
     author id
 }
 
-command Rainbow {
+command Rainbow with Base {
     attributes {
         priority: 0,
     }
@@ -101,9 +107,6 @@ command Rainbow {
     fields {
         author id
     }
-
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {
@@ -125,7 +128,7 @@ effect AmbientColorChanged {
     color enum AmbientColor,
 }
 
-command SetAmbientColor {
+command SetAmbientColor with Base {
     attributes {
         priority: 0,
     }
@@ -134,9 +137,6 @@ command SetAmbientColor {
         author id,
         color enum AmbientColor,
     }
-
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
 
     policy {
         match query CurrentColor[] {

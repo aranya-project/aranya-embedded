@@ -1,4 +1,4 @@
-use alloc::{sync::Arc, vec::Vec};
+use alloc::sync::Arc;
 use core::ops::DerefMut;
 
 use aranya_crypto::{
@@ -12,8 +12,7 @@ use aranya_crypto::{
 };
 use aranya_runtime::{
     linear::LinearStorageProvider, mem_spill, vm_action, ClientState, Command, CommandExt as _,
-    GraphId, PeerCache, RuntimeBuffers, Sink, Spill, StorageError, StorageProvider, Transaction,
-    VmEffect,
+    GraphId, PeerCache, RuntimeBuffers, Sink, StorageProvider, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -153,12 +152,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
 fn dump_commands(cmds: &[impl Command]) {
     for c in cmds {
-        log::info!(
-            "  priority {:?} {} MAX_CUT {}",
-            c.priority(),
-            c.id(),
-            c.max_cut().unwrap()
-        );
+        log::info!("  {} MAX_CUT {}", c.id(), c.max_cut().unwrap());
     }
 }
 

@@ -7,9 +7,8 @@ use alloc::{
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
-    linear::LinearSegment, Address, Command, GraphId, Location, PeerCache, PollIncoming, Segment,
-    Storage, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
-    MAX_SYNC_MESSAGE_SIZE,
+    Address, PeerCache, PollIncoming, Storage, StorageProvider, SyncError, SyncIncoming,
+    SyncRequester, SyncResponder, Transaction, MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_time::{Duration, Instant, Timer};
 use parameter_store::MAX_PEERS;
