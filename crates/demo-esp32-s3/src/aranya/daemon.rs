@@ -1,4 +1,4 @@
-use alloc::sync::Arc;
+use alloc::{sync::Arc, vec::Vec};
 use core::ops::DerefMut;
 
 use aranya_crypto::{
@@ -49,8 +49,8 @@ const NULL_KEY: [u8; 32] = [0u8; 32];
 
 pub struct Daemon {
     aranya: Arc<Mutex<Client>>,
+    verifying_key: Vec<u8>,
 }
-
 impl Daemon {
     pub async fn init(storage_provider: SP) -> Result<Self> {
         log::info!("Loading Crypto Engine");
@@ -61,10 +61,14 @@ impl Daemon {
 
         log::info!("Loading Policy");
         let policy = EmbeddedPolicyStore::new(crypto_engine)?;
+        let verifying_key = postcard::to_allocvec(&policy.seal_ctx.key.public()?)?;
         log::info!("Creating an Aranya client");
         let aranya = Arc::new(Mutex::new(ClientState::new(policy, storage_provider)));
 
-        Ok(Daemon { aranya })
+        Ok(Daemon {
+            aranya,
+            verifying_key,
+        })
     }
 
     pub async fn create_team(&mut self) -> Result<GraphId> {
@@ -75,8 +79,11 @@ impl Daemon {
         //Rng.fill_bytes(&mut nonce);
 
         let mut aranya = self.aranya.lock().await;
-        let graph_id =
-            aranya.new_graph(&[0u8], vm_action!(create_team(nonce.as_slice())), &mut sink)?;
+        let graph_id = aranya.new_graph(
+            &[0u8],
+            vm_action!(create_team(nonce.as_slice(), self.verifying_key.clone())),
+            &mut sink,
+        )?;
 
         Ok(graph_id)
     }
