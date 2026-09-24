@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use aranya_crypto::{
     dangerous::spideroak_crypto::{
         aead::{Aead, AeadKey},
@@ -63,6 +65,7 @@ pub static EFFECT_OUT_CHANNEL: PubSubChannel<VmEffect> = PubSubChannel::new();
 
 pub struct Daemon<'a> {
     aranya: Client,
+    verifying_key: Vec<u8>,
     #[cfg(feature = "net-esp-now")]
     syncer_esp_now: Option<SyncEngine<'a, EspNowNetworkInterface<'a>>>,
     #[cfg(feature = "net-irda")]
@@ -79,11 +82,13 @@ impl<'a> Daemon<'a> {
 
         log::info!("Loading Policy");
         let policy = EmbeddedPolicyStore::new(crypto_engine)?;
+        let verifying_key = postcard::to_allocvec(&policy.seal_ctx.key.public()?)?;
         log::info!("Creating an Aranya client");
         let aranya = ClientState::new(policy, storage_provider);
 
         Ok(Daemon {
             aranya,
+            verifying_key,
             #[cfg(feature = "net-esp-now")]
             syncer_esp_now: None,
             #[cfg(feature = "net-irda")]
@@ -118,9 +123,11 @@ impl<'a> Daemon<'a> {
         let nonce = [0u8; 16];
         //Rng.fill_bytes(&mut nonce);
 
-        let graph_id =
-            self.aranya
-                .new_graph(&[0u8], vm_action!(create_team(nonce.as_slice())), &mut sink)?;
+        let graph_id = self.aranya.new_graph(
+            &[0u8],
+            vm_action!(create_team(nonce.as_slice(), self.verifying_key.clone())),
+            &mut sink,
+        )?;
 
         Ok(graph_id)
     }

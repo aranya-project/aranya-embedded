@@ -12,8 +12,7 @@ use aranya_crypto::{
 };
 use aranya_runtime::{
     linear::LinearStorageProvider, mem_spill, vm_action, ClientState, Command, CommandExt as _,
-    GraphId, PeerCache, RuntimeBuffers, Sink, Spill, StorageError, StorageProvider, Transaction,
-    VmEffect,
+    GraphId, PeerCache, RuntimeBuffers, Sink, StorageProvider, Transaction, VmEffect,
 };
 use embassy_sync::{blocking_mutex::raw::CriticalSectionRawMutex, mutex::MutexGuard};
 
@@ -50,8 +49,8 @@ const NULL_KEY: [u8; 32] = [0u8; 32];
 
 pub struct Daemon {
     aranya: Arc<Mutex<Client>>,
+    verifying_key: Vec<u8>,
 }
-
 impl Daemon {
     pub async fn init(storage_provider: SP) -> Result<Self> {
         log::info!("Loading Crypto Engine");
@@ -62,10 +61,14 @@ impl Daemon {
 
         log::info!("Loading Policy");
         let policy = EmbeddedPolicyStore::new(crypto_engine)?;
+        let verifying_key = postcard::to_allocvec(&policy.seal_ctx.key.public()?)?;
         log::info!("Creating an Aranya client");
         let aranya = Arc::new(Mutex::new(ClientState::new(policy, storage_provider)));
 
-        Ok(Daemon { aranya })
+        Ok(Daemon {
+            aranya,
+            verifying_key,
+        })
     }
 
     pub async fn create_team(&mut self) -> Result<GraphId> {
@@ -76,8 +79,11 @@ impl Daemon {
         //Rng.fill_bytes(&mut nonce);
 
         let mut aranya = self.aranya.lock().await;
-        let graph_id =
-            aranya.new_graph(&[0u8], vm_action!(create_team(nonce.as_slice())), &mut sink)?;
+        let graph_id = aranya.new_graph(
+            &[0u8],
+            vm_action!(create_team(nonce.as_slice(), self.verifying_key.clone())),
+            &mut sink,
+        )?;
 
         Ok(graph_id)
     }
@@ -153,12 +159,7 @@ impl<S: Sink<VmEffect>> Imp<S> {
 
 fn dump_commands(cmds: &[impl Command]) {
     for c in cmds {
-        log::info!(
-            "  priority {:?} {} MAX_CUT {}",
-            c.priority(),
-            c.id(),
-            c.max_cut().unwrap()
-        );
+        log::info!("  {} MAX_CUT {}", c.id(), c.max_cut().unwrap());
     }
 }
 

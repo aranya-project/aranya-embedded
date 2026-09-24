@@ -1,11 +1,11 @@
-use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec, vec::Vec};
+use alloc::{boxed::Box, collections::btree_map::BTreeMap, string::String, vec};
 use core::task::Poll;
 
 use aranya_crypto::Rng;
 use aranya_runtime::{
     mem_spill, Address, Command, CommandExt as _, GraphId, PeerCache, PollIncoming, RuntimeBuffers,
-    Spill, Storage, StorageError, StorageProvider, SyncError, SyncIncoming, SyncRequester,
-    SyncResponder, Transaction, MAX_SYNC_MESSAGE_SIZE,
+    Storage, StorageProvider, SyncError, SyncIncoming, SyncRequester, SyncResponder, Transaction,
+    MAX_SYNC_MESSAGE_SIZE,
 };
 use embassy_futures::{poll_once, yield_now};
 use embassy_time::{Duration, Instant};
@@ -411,11 +411,6 @@ async fn add_commands(
 
 fn dump_commands(cmds: &[impl Command]) {
     for c in cmds {
-        log::info!(
-            "  priority {:?} {} MAX_CUT {}",
-            c.priority(),
-            c.id(),
-            c.max_cut().unwrap()
-        );
+        log::info!("  {} MAX_CUT {}", c.id(), c.max_cut().unwrap());
     }
 }

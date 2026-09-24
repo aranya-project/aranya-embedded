@@ -3,17 +3,31 @@ policy-version: 2
 ---
 
 ```policy
-use envelope
+base command BaseInit {
+    fields { key bytes }
+    get_key { return Some(this.key) }
+}
 
-action create_team(nonce bytes) {
-    publish Init {
-        nonce: nonce,
+base command Base {
+    get_key {
+        return match query Key[] {
+            Some(f) => Some(f.key)
+            None => None
+        }
     }
+}
+
+fact Key[]=>{key bytes}
+```
+
+```policy
+action create_team(nonce bytes, key bytes) {
+    publish Init { nonce, key }
 }
 
 effect TeamCreated {}
 
-command Init {
+command Init with BaseInit {
     attributes {
         init: true,
     }
@@ -22,11 +36,9 @@ command Init {
         nonce bytes,
     }
 
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
-
     policy {
         finish {
+            create Key[]=>{key: this.key}
             emit TeamCreated {}
         }
     }
@@ -46,7 +58,7 @@ effect LedColorChanged {
     b int,
 }
 
-command SetLedColor {
+command SetLedColor with Base {
     attributes {
         priority: 0,
     }
@@ -56,9 +68,6 @@ command SetLedColor {
         g int,
         b int,
     }
-
-    seal { return envelope::do_seal(payload) }
-    open { return envelope::do_open(payload, envelope) }
 
     policy {
         finish {

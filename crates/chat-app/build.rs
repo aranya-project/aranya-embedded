@@ -7,11 +7,7 @@ use std::{
 
 use aranya_policy_compiler::Compiler;
 use aranya_policy_lang::lang::parse_policy_document;
-use aranya_policy_vm::{
-    ffi::{FfiModule, ModuleSchema},
-    Module,
-};
-use envelope_ffi::NullEnvelope;
+use aranya_policy_vm::Module;
 use rkyv::rancor::Error;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -25,14 +21,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 
 fn aranya_setup() {
-    let ffi_schema: &[ModuleSchema<'static>] = &[NullEnvelope::SCHEMA];
     // Parse policy
     let ast =
         parse_policy_document(include_str!("config/policy.md")).expect("parse policy document");
 
     // Compile AST
     let module = Compiler::new(&ast)
-        .ffi_modules(ffi_schema)
         .compile()
         .expect("Failed to compile AST");
 

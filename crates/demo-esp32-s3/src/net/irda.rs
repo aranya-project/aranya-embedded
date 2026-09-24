@@ -34,10 +34,7 @@
 //!          1 will cause the 1 to flip to a 0.
 
 use alloc::{collections::btree_map::BTreeMap, vec::Vec};
-use core::{
-    mem::MaybeUninit,
-    sync::atomic::{AtomicU32, AtomicU8, Ordering},
-};
+use core::sync::atomic::{AtomicU32, AtomicU8, Ordering};
 
 use crc::{self, Crc};
 use embassy_sync::blocking_mutex::raw::CriticalSectionRawMutex;

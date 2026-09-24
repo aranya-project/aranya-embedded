@@ -6,7 +6,6 @@ edition = "2021"
 
 [dependencies]
 board-defs = { path = "../board-defs" }
-envelope-ffi = { path = "../envelope-ffi" }
 esp-rmt-neopixel = { path = "../esp-rmt-neopixel" }
 parameter-store = { path = "../parameter-store", features = ["embedded"] }
 
@@ -70,7 +69,6 @@ aranya-policy-compiler = { workspace = true }
 aranya-policy-ifgen-build = { workspace = true }
 aranya-policy-lang = { workspace = true }
 aranya-policy-vm = { workspace = true }
-envelope-ffi = { path = "../envelope-ffi" }
 rkyv = { workspace = true, features = ["alloc", "bytecheck"] }
 
 
