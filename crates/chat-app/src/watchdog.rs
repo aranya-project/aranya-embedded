@@ -7,7 +7,7 @@ use esp_hal::{
 use fugit::ExtU64;
 use static_cell::StaticCell;
 
-const WATCHDOG_TIMEOUT_MS: u64 = 750;
+const WATCHDOG_TIMEOUT_MS: u64 = 1000;
 const WATCHDOG_FEED_INTERVAL_MS: u64 = 50;
 
 static WATCHDOG0: StaticCell<Watchdog<TIMG0>> = StaticCell::new();
