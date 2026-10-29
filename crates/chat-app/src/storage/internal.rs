@@ -88,7 +88,7 @@ where
     buf.copy_within(MAGIC_LEN..MAGIC_LEN + HEADER_SIZE, 0);
 
     let header =
-        rkyv::access::<ArchivedEspStorageHeader, rancor::Error>(&buf[HEADER_MAGIC.len()..])
+        rkyv::access::<ArchivedEspStorageHeader, rancor::Error>(&buf[..HEADER_SIZE])
             .map_err(|e| {
                 log::error!("rkyv::access: {e}");
                 StorageError::BadHeader
