@@ -71,12 +71,13 @@ fn fetch_header<S>(
 ) -> Result<EspStorageHeader, StorageError>
 where
     S: embedded_storage::ReadStorage,
+    <S as embedded_storage::ReadStorage>::Error: core::fmt::Debug,
 {
     let mut buf = rkyv::util::Align([0u8; HEADER_MAGIC.len() + HEADER_SIZE]);
     storage
         .lock(|storage| storage.borrow_mut().read(offset, buf.as_mut()))
         .map_err(|e| {
-            log::error!("storage read: {e}");
+            log::error!("storage read: {e:?}");
             StorageError::BadHeader
         })?;
     if buf[0..HEADER_MAGIC.len()] != HEADER_MAGIC {
@@ -106,17 +107,17 @@ fn write_header<S>(
 ) -> Result<(), StorageError>
 where
     S: embedded_storage::Storage,
+    <S as embedded_storage::ReadStorage>::Error: core::fmt::Debug,
 {
     let mut buf = Vec::with_capacity(HEADER_MAGIC.len() + HEADER_SIZE);
     buf.extend_from_slice(&HEADER_MAGIC);
     buf.extend_from_slice(&rkyv::to_bytes::<rancor::Error>(header)?);
-    log::debug!("write {:?}", buf);
 
     log::debug!("write header @{offset:08X}");
     storage
         .lock(|storage| storage.borrow_mut().write(offset, &buf))
         .map_err(|e| {
-            log::error("storage write: {e}");
+            log::error!("storage write: {e:?}");
             StorageError::Write
         })?;
 
@@ -246,6 +247,7 @@ where
 impl<S> Writer<S>
 where
     S: embedded_storage::Storage,
+    <S as embedded_storage::ReadStorage>::Error: core::fmt::Debug,
 {
     fn new(
         storage: Arc<Mutex<CriticalSectionRawMutex, RefCell<S>>>,
